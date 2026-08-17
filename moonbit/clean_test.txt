@@ -1,3 +1,0 @@
-﻿x=1.1805916207174113e+21
-res=1.0 ZiB
-Total tests: 19, passed: 19, failed: 0.
