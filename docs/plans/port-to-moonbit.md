@@ -141,11 +141,12 @@ moonbit/
 
 | Phase | 状态 | 备注 |
 |---|---|---|
-| P0 能力核实（G1–G9） | ⬜ 待开始 | 阻塞 Phase 1/2 |
-| Phase 1 number | ⬜ 待开始 | |
-| Phase 2 time | ⬜ 待开始 | |
-| Phase 3 filesize+lists | ⬜ 待开始 | |
-| Phase 4 集成/测试 | ⬜ 待开始 | |
+| P0 能力核实（G1–G9） | ✅ 完成 | 通过实际工具链验证：enum payload、`let mut`、C 风格 `for`、Array `+/+=`、`@math.floor/round/log10` 可用；`List`/`var`/`while`(裸)/`derive`(独立行) 不可用，已采用 `Array`/`let mut`/C-for/`@math` |
+| Phase 1 number | ✅ 完成（历史提交） | intcomma/ordinal/apnumber/intword/scientific/clamp/metric/fractional 已在早期提交实现；详见 git 历史 |
+| Phase 2 time | ✅ 完成 | time.mbt：naturaldelta/naturaltime/naturalday/naturaldate/precisedelta 已实现；`moon build` 通过 |
+| Phase 2 i18n | ⚠️ 桩实现 | i18n.mbt 仅提供 gettext/pgettext 桩与分隔符常量（locale 数据范围外） |
+| Phase 3 filesize+lists | ✅ 完成 | filesize.mbt(naturalsize)/lists.mbt(natural_list) 已实现；`moon build` 通过 |
+| Phase 4 集成/测试 | ⚠️ 部分 | 黄金值测试已写入 time_test/filesize_test/lists_test（对照已安装 humanize）；`moon test` 在本环境因工具链驱动问题无法运行，需在健康环境验证 |
 
 ---
 
@@ -156,3 +157,12 @@ moonbit/
 - **R3 时间 API 形态**：`naturaltime` 等若依赖完整 datetime，可能需调整 API 设计为接受"自纪元秒数"，以保持 MoonBit 端自洽（规范未强制 API 完全一致，仅要求行为对照）。
 - **R4 工具链版本**：实际 `0.1.20260807` ≠ 规范声称 `0.1.20260629`；实现时以其实际提供能力为准，不假设规范列出的特性均可用。
 - **R5 范围外**：i18n/locale 模块不移植；任何需要 locale 数据的函数按 `en` 默认行为实现。
+- **R6 本环境工具链实测结论**（`moon 0.1.20260807`）：
+  - 可变绑定用 `let mut x = ...`（裸 `mut`/`var` 均报 "unexpected token mut"）。
+  - 循环用 C 风格 `for i = 0; i < n; i = i + 1 { }`；裸 `while`/`loop`/`for x in` 报错。
+  - 数组用 `Array[T]`（prelude 不导出 `List`）；拼接用 `a + [x]` 或 `a += [x]`，`Array::push` 不就地修改。
+  - 枚举变体用换行分隔（**不要** `|` 分隔）；`enum X { A(Int) }` 带载荷语法可用；`derive(Eq)` 需与 `}` **同行**（独立行会级联报错）。
+  - `Unit` 需 `derive(Eq)` 才能用 `==`/`!=`；`not(...)` 已废弃，用 `!(...)`。
+  - `Double` 没有 `.truncate()`；用 `@math.floor`；`String.parse_double` 返回错误类型，改用 `@math.round` 自实现 `_round_decimals`。
+  - `1e6` 是 Float 字面量（与 Double 不匹配），用 `1000000.0`。
+  - `moon test` 的测试驱动在本环境损坏（生成代码 "has type Unit wanted Unit"），无法运行测试；但 `moon build` 可正常编译含 `test {}` 块的程序。
