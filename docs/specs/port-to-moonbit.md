@@ -24,8 +24,9 @@
 | 能力 | MoonBit 对应 | 备注 |
 |------|-------------|------|
 | 大整数(googol, 100位) | `BigInt`(`123N` / `from_string` / `Show::to_string`，任意精度) | `intword` 可用 |
-| `math.log10` | `@math.log10(x: Double) -> Double` | `intword` 指数计算 |
-| `math.floor/ceil/round/trunc` | `@math.floor/@math.ceil/@math.round/@math.trunc`（由 `@double` 重导出） | 浮点取整 |
+| `math.log10` | `@math.log10(x: Double) -> Double`（调用带 `@` 前缀包名别名） | `intword` 指数计算 |
+| `math.floor/ceil/round/trunc` | `@double.floor/@double.ceil` 等，作为方法 `(x).floor()` 或 `@double.floor(x)`（由 `math/round.mbt` 的 `pub using @double` 重导出） | 浮点取整 |
+| import 机制 | 包导入写在 `moon.pkg`（`import { "moonbitlang/core/math" }`），不可写在 .mbt | 工程结构 |
 | 浮点格式化 `%.1f` | `Double::to_string()` 存在，但无精度格式符 | 需自写 `format_fixed` |
 | `Fraction.limit_denominator` | 无 Fraction 类型 | `fractional` 需自实现连分数近似 |
 | `bisect` 二分查找 | 数组 `binary_search` 可替代 | `intword` 区间定位 |
@@ -33,7 +34,7 @@
 | gettext `.po` | 无原生对应 | MVP 不做(NG1) |
 | WASM/JS 导出 | `foreign_library` + `#export_name` + `moon build --target wasm` | 交付形态(G2) |
 
-> 环境注意: 本机 `moonc` 当前未捆绑 core 标准库，Phase 0 须先修复环境（重装 moonc / 联网 `moon update`）。
+> 环境状态(已实测 2026-08-17): 本机 `moon` 工具链与 core 标准库**均完好可用**。先前"Cannot load core file"系误用旧版 `moon.mod` 格式所致；改用现代 `moon new` 生成工程（含 `moon.pkg`/`moon.mod`）后 `moon check` 正常。验证通过的调用方式：`BigInt` 字面量 `123N`、`@math.log10(x)`、`(x).floor()`，包导入置于 `moon.pkg`。
 
 ## 4. 目标架构
 
