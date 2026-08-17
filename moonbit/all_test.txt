@@ -1,0 +1,9 @@
+﻿moon : Error: Failed to run the test: E:\moonbit\moon-humanize\moonbit\_build\wasm\debug\test\src\humanize\humanize.bla
+ckbox_test.wasm
+At F:\Temp\genie-ps-1786978905003-ogjk0f.ps1:558 char:38
++ cd e:\moonbit\moon-humanize\moonbit; moon test 2>&1 | Out-File -Encod ...
++                                      ~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error: Failed t...ckbox_test.wasm:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The test executable exited with exit code: 0xc0000139

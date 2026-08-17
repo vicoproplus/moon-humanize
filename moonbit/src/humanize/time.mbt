@@ -86,13 +86,16 @@ pub fn timedelta(
   seconds~ : Int = 0,
   microseconds~ : Int = 0
 ) -> TimeDelta {
-  let total = days * 86400 * 1_000_000 + seconds * 1_000_000 + microseconds
-  let neg = total < 0
+  let day_us : Int64 = 86400L * 1_000_000L
+  let total : Int64 =
+    days.to_int64() * day_us + seconds.to_int64() * 1_000_000L +
+    microseconds.to_int64()
+  let neg = total < 0L
   let t = if neg { -total } else { total }
-  let d = t / (86400 * 1_000_000)
-  let rem = t % (86400 * 1_000_000)
-  let s = rem / 1_000_000
-  let us = rem % 1_000_000
+  let d = (t / day_us).to_int()
+  let rem = t % day_us
+  let s = (rem / 1_000_000L).to_int()
+  let us = (rem % 1_000_000L).to_int()
   TimeDelta::{ days: d, seconds: s, microseconds: us, is_neg: neg }
 }
 
@@ -107,6 +110,21 @@ fn seconds_to_delta(n : Double) -> TimeDelta {
   let s = rem / 1_000_000
   let us = rem % 1_000_000
   TimeDelta::{ days: d, seconds: s, microseconds: us, is_neg: neg }
+}
+
+// Round half to even (banker's rounding), mirroring Python's `round` used by
+// python-humanize's `naturaltime` for the plain-seconds input path.
+fn round_half_even(x : Double) -> Double {
+  let f = @math.floor(x)
+  if (x - f) == 0.5 {
+    if (f.to_int() % 2) == 0 {
+      f
+    } else {
+      f + 1.0
+    }
+  } else {
+    @math.round(x)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +320,7 @@ pub fn naturaltime(
   let (delta, is_future) = match value {
     TimeInput::Delta(d) => (d, d.is_neg)
     TimeInput::Seconds(s) => {
-      let rounded = @math.round(s)
+      let rounded = round_half_even(s)
       (seconds_to_delta(rounded), false)
     }
   }
@@ -666,7 +684,14 @@ fn _quotient_and_remainder(
   }
   let q = @math.floor(value / divisor)
   let r = value - q * divisor
-  (q, r)
+  // python-humanize keeps the months remainder as an integer day count
+  // (1 month = 30.5 days on average, but 31 days must round to a whole month
+  // rather than 1 month + 0.5 day).
+  if TimeUnit::same(unit, TimeUnit::months()) {
+    (q, r.to_int().to_double())
+  } else {
+    (q, r)
+  }
 }
 
 fn _round_decimals(value : Double, prec : Int) -> Double {

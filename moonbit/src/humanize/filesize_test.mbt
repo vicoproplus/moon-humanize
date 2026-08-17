@@ -20,23 +20,23 @@ test "naturalsize basic" {
 
 test "naturalsize binary" {
   @test.assert_eq(naturalsize(1000000.0, binary=true), "976.6 KiB")
-  @test.assert_eq(naturalsize(1000000000.0, binary=true), "954.2 MiB")
+  @test.assert_eq(naturalsize(1000000000.0, binary=true), "953.7 MiB")
   @test.assert_eq(naturalsize(1000000000000.0, binary=true), "931.3 GiB")
   @test.assert_eq(naturalsize(1000000000000000.0, binary=true), "909.5 TiB")
   @test.assert_eq(naturalsize(1000000000000000000.0, binary=true), "888.2 PiB")
   @test.assert_eq(naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true), "1.0 TiB")
   @test.assert_eq(
     naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true),
-    "1024.0 TiB",
+    "1.0 PiB",
   )
-  @test.assert_eq(naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true), "1.0 PiB")
+  @test.assert_eq(naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true), "1.0 EiB")
   @test.assert_eq(
     naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true),
-    "1024.0 PiB",
+    "1.0 ZiB",
   )
   @test.assert_eq(
     naturalsize(1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0, binary=true),
-    "1.0 EiB",
+    "1.0 YiB",
   )
 }
 

@@ -2,17 +2,19 @@
 // Phase 2 target functions: naturalsize.
 // See docs/specs/port-to-moonbit.md.
 
-// Decimal symbol tables (default `en`; i18n is out of scope for Phase 2).
+// Symbol tables without the trailing "B" (the `suffix` is appended separately).
+// Index 0 is unused here; the sub-threshold "Byte"/"Bytes" case is handled
+// specially. Decimal/binary/gnu follow python-humanize's tables.
 let decimal_symbols : Array[String] = [
-  "Byte", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "RB", "QB",
+  "", "k", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q",
 ]
 
 let binary_symbols : Array[String] = [
-  "Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB",
+  "", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi", "Ri", "Qi",
 ]
 
 let gnu_symbols : Array[String] = [
-  "Byte", "K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q",
+  "", "K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q",
 ]
 
 fn _fs_get_symbols(symbols : String?) -> Array[String] {
@@ -81,10 +83,21 @@ pub fn naturalsize(
   let val = num / divisor
 
   let mut result = _fs_format(val, format)
-  if is_gnu {
+  if exponent == 0 {
+    // Sub-threshold: render "Byte"/"Bytes" (python-humanize strips a trailing
+    // ".0" from the default 1-decimal format). The suffix is not appended.
+    if result.has_suffix(".0") {
+      result = (result[: result.length() - 2]).to_owned()
+    }
+    if num == 1.0 {
+      result = result + " Byte"
+    } else {
+      result = result + " Bytes"
+    }
+  } else if is_gnu {
     // GNU does not add a decimal point before the symbol
     result = result.replace(old= ".0", new= "")
-    result = result + symbols_arr[exponent]
+    result = result + symbols_arr[exponent] + suffix
   } else {
     result = result + " " + symbols_arr[exponent] + suffix
   }

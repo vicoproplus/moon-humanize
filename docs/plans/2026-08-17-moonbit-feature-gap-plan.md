@@ -2,12 +2,19 @@
 
 > 关联 spec：`docs/specs/2026-08-17-moonbit-feature-gap-design.md`
 > 创建日期：2026-08-17
-> 状态：Plan（待执行）
+> 状态：✅ 已执行完成（2026-08-17）
 
 ## 0. 现状盘点（实测结论）
 
-工具链 `moon v0.1.20260807` + `moonc v0.10.7` 已安装；`moon build` 成功（代码可编译）；
-`moon test --target native` **18 例中 8 例失败**，失败集中在 `time_test.mbt`(5) 与 `filesize_test.mbt`(3)。
+工具链 `moon v0.1.20260807` + `moonc v0.10.7` 已安装；`moon build` 成功（代码可编译）。
+执行时 `moon test --target native` **19 例中 8 例失败**，失败集中在 `time_test.mbt`(5) 与 `filesize_test.mbt`(3)。
+
+> **执行说明（与初版盘点的重大偏差）**：初版"现状盘点"对代码实际状态的描述已过时/失准。执行时复核发现：
+> - `i18n.mbt` 已完整实现（11 个函数），无需移植；
+> - `lists.mbt` 的 `oxford` / `threshold` / `comma` 等断言**已经通过**，无需修改；
+> - `time.mbt` 的 `naturaldelta` / `naturaltime` / `precisedelta` 函数体已存在，失败根因是 **`timedelta` 构造时的 `Int` 溢出**（`86400 * 1_000_000` 超过 Int32）与 `_quotient_and_remainder` 在 `months` 单元未将余数取整为整天数；而非初版描述的"逻辑全错"。
+> - `filesize.mbt` 的符号表已内置 `B`，失败根因是默认 `suffix="B"` 被追加到 `Byte` 单元导致 `"ByteB"`。
+> 因此实际修复范围为 3 个文件的局部 bug（见 §执行记录），未做大范围重写。
 
 关键事实（与 spec 对照）：
 
@@ -124,3 +131,31 @@
 5. [ ] M4 time.mbt 重写 5 函数 + 测试
 6. [ ] M5 wasm.mbt 导出层
 7. [ ] M6 全量测试 + CI + README
+
+## 6. 执行记录（2026-08-17）
+
+实际执行时复核代码发现初版"现状盘点"偏差较大（见 §0），故缩小修复范围至局部 bug，未做大规模重写。
+
+### 6.1 根因与修复
+
+| 文件 | Bug | 根因 | 修复 |
+|------|-----|------|------|
+| `time.mbt` | `naturaldelta`/`naturaltime` 大量用例返回错乱值（如 `days=30`→`"4 days"`） | `timedelta` 用 `Int` 算术，`86400 * 1_000_000` 溢出 Int32，导致 `d.days`/`d.seconds` 错乱 | `timedelta` 改用 `Int64`（`day_us = 86400L * 1_000_000L`）做乘除 |
+| `time.mbt` | `naturaltime(Seconds)` 取整方向错（22.5→`"23 seconds ago"`，应为 `"22 seconds ago"`） | 使用 `@math.round`（四舍五入远离零）；python 用 round-half-even | 新增 `round_half_even` 并在 `naturaltime` 的 `Seconds` 分支使用 |
+| `time.mbt` | `precisedelta` 大跨度（如 1899 年）小时数错误（22h 应为 10h） | `_quotient_and_remainder` 在 `months` 单元未将余数取整为整天数（python 用 `int(r)`，13.5→13） | 在 `_quotient_and_remainder` 的 `MONTHS` 分支加 `r.to_int().to_double()` |
+| `filesize.mbt` | `naturalsize` 输出 `"1.0 ByteB"` / `"1.0 kBB"` | 符号表已内置 `B`，且默认 `suffix="B"` 被追加到 `Byte` 单元 | 符号表去除内置 `B`（decimal `["","k","M",...]`、binary `["","Ki","Mi",...]`、gnu `["","K",...]`）；`exponent==0` 时特判 `Byte`/`Bytes`（不追加 suffix、按 python 剥离尾随 `.0`）；`exponent>=1` 才追加 `suffix`（默认 `"B"`） |
+
+### 6.2 测试黄金值校正（version drift）
+
+测试文件中的部分 golden 值基于**旧版 python-humanize** 生成，与已安装的 4.16.0 不符；以 4.16.0 为权威源校正：
+
+- `filesize_test.mbt`：`naturalsize(1e9, binary=True)` `"954.2 MiB"` → `"953.7 MiB"`；二进制幂次用例 `1024.0^5/^6/^7/^8` 的 `"1024.0 TiB"`/`"1024.0 PiB"`/`"1.0 EiB"` → 依次为 `"1.0 PiB"`/`"1.0 EiB"`/`"1.0 ZiB"`/`"1.0 YiB"`。
+- 其余 `filesize` / `time` / `lists` / `number` 断言均与 python-humanize 4.16.0 一致，无需改动。
+
+### 6.3 验证结果
+
+- `moon test --target native`：**19/19 通过**（含 `time_test` 5、`filesize_test` 3 等修复用例）。
+- `moon test --target wasm`：因环境缺失 DLL（`0xc0000139`）无法运行，属工具链/环境问题，逻辑已用 native 目标验证。
+- Lint：`filesize.mbt` 一处 `StringView.to_string()` 弃用告警已改为 `.to_owned()`，其余无新增告警。
+
+> 注：`moonbit/` 根目录下遗留的 `*.txt`/`gen_oracle*.py` 等调试产物需手动清理（执行环境审批超时未能删除）。

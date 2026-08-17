@@ -1,0 +1,13 @@
+﻿moon : moon-humanize.internal_test.c
+At F:\Temp\genie-ps-1786979210018-dk0ecl.ps1:558 char:38
++ ... moonbit\moon-humanize\moonbit; moon test --target native 2>&1 | Out-F ...
++                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (moon-humanize.internal_test.c:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+moon-humanize.blackbox_test.c
+humanize.internal_test.c
+humanize.blackbox_test.c
+x=1.1805916207174113e+21
+res=1.0 ZiB
+Total tests: 19, passed: 19, failed: 0.
