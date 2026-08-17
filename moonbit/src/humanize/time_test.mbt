@@ -76,6 +76,17 @@ test "naturaltime" {
   @test.assert_eq(naturaltime(TimeInput::from_delta(timedelta(days=100000))), "273 years ago")
 }
 
+test "naturaldelta/naturaltime large seconds (Int64 overflow guard)" {
+  // 10_000_000 s ~= 115.7 days; 200_000_000 s ~= 2314 days. These must not
+  // overflow Int32 (the bug fixed in seconds_to_delta). Expected values come
+  // from python-humanize 4.16.0.
+  @test.assert_eq(naturaldelta(TimeInput::from_seconds(10_000_000.0)), "4 months")
+  @test.assert_eq(naturaldelta(TimeInput::from_seconds(200_000_000.0)), "6 years")
+  @test.assert_eq(naturaldelta(TimeInput::from_seconds(10_000_000.0), months=false), "115 days")
+  @test.assert_eq(naturaltime(TimeInput::from_seconds(10_000_000.0)), "4 months ago")
+  @test.assert_eq(naturaltime(TimeInput::from_seconds(200_000_000.0)), "6 years ago")
+}
+
 test "precisedelta" {
   // pd1: 2 days, 1 hour, 3 minutes, 12 seconds, 5486 microseconds
   let pd1 = TimeInput::from_delta(timedelta(seconds=176592, microseconds=5486))

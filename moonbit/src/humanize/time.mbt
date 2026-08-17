@@ -104,11 +104,13 @@ pub fn timedelta(
 fn seconds_to_delta(n : Double) -> TimeDelta {
   let neg = n < 0.0
   let abs = if neg { -n } else { n }
-  let total = (abs * 1_000_000.0).round().to_int()
-  let d = total / (86400 * 1_000_000)
-  let rem = total % (86400 * 1_000_000)
-  let s = rem / 1_000_000
-  let us = rem % 1_000_000
+  // Use Int64 to avoid Int32 overflow: 86400 * 1_000_000 exceeds 2^31.
+  let day_us : Int64 = 86400L * 1_000_000L
+  let total : Int64 = (abs * 1_000_000.0).round().to_int64()
+  let d = (total / day_us).to_int()
+  let rem = total % day_us
+  let s = (rem / 1_000_000L).to_int()
+  let us = (rem % 1_000_000L).to_int()
   TimeDelta::{ days: d, seconds: s, microseconds: us, is_neg: neg }
 }
 
