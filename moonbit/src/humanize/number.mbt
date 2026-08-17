@@ -222,7 +222,7 @@ pub fn intword(value : String, format~ : String = "%.1f") -> String {
         _ => return value
       }
       let chopped = v / power
-      let unit = intword_units[ordinal]
+      let unit = gettext(intword_units[ordinal])
       let number = format_float_with(format, chopped)
       (if neg { "-" } else { "" }) + number + " " + unit
     }

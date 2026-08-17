@@ -1,0 +1,565 @@
+#!/usr/bin/env python3
+"""po2mbt - generate moonbit/src/humanize/i18n_data.mbt from .po translation files.
+
+Scans ``src/humanize/locale/*/LC_MESSAGES/humanize.po`` and emits a MoonBit
+module containing:
+
+  * ``plural_index(locale, n)``  - per-locale gettext plural selection
+  * ``thousands_sep_for`` / ``decimal_sep_for`` - separator maps
+  * ``lookup_message`` / ``lookup_context`` / ``lookup_plural`` - translation tables
+
+Usage:
+    scripts/po2mbt [path/to/src/humanize/locale] [path/to/output/i18n_data.mbt]
+
+Defaults resolve relative to the repository root (the parent of ``scripts/``).
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+
+# Locale variant names must match i18n.mbt's `Locale` enum constructor order.
+LOCALE_CTORS = {
+    "ar": "Ar",
+    "bn_BD": "BnBD",
+    "ca_ES": "CaES",
+    "da_DK": "DaDK",
+    "de_DE": "DeDE",
+    "el_GR": "ElGR",
+    "eo": "Eo",
+    "es_ES": "EsES",
+    "eu": "Eu",
+    "fa_IR": "FaIR",
+    "fi_FI": "FiFI",
+    "fr_FR": "FrFR",
+    "he_IL": "HeIL",
+    "hu_HU": "HuHU",
+    "id_ID": "IdID",
+    "it_IT": "ItIT",
+    "ja_JP": "JaJP",
+    "ko_KR": "KoKR",
+    "lv": "Lv",
+    "nb": "Nb",
+    "nl_NL": "NlNL",
+    "pl_PL": "PlPL",
+    "pt_BR": "PtBR",
+    "pt_PT": "PtPT",
+    "ru_RU": "RuRU",
+    "si_LK": "SiLK",
+    "sk_SK": "SkSK",
+    "sl_SI": "SlSI",
+    "sv_SE": "SvSE",
+    "tlh": "Tlh",
+    "tr_TR": "TrTR",
+    "uk_UA": "UkUA",
+    "uz": "Uz",
+    "vi_VN": "ViVN",
+    "zh_CN": "ZhCN",
+    "zh_HK": "ZhHK",
+}
+
+# Thousands / decimal separators mirror python-humanize's i18n.py maps.
+THOUSANDS_SEP = {
+    "de_DE": ".",
+    "fr_FR": " ",
+    "it_IT": ".",
+    "pt_BR": ".",
+    "hu_HU": " ",
+    "lv": " ",
+}
+DECIMAL_SEP = {
+    "de_DE": ",",
+    "fr_FR": ".",
+    "it_IT": ",",
+    "pt_BR": ",",
+    "hu_HU": ",",
+    "lv": ",",
+}
+
+# ---------------------------------------------------------------------------
+# PO parser
+# ---------------------------------------------------------------------------
+
+
+def read_po(path: str) -> dict:
+    """Parse a single .po file into a dict of entries.
+
+    Returns ``{"plural_forms": str|None, "messages": [...], "plurals": [...],
+    "contexts": [...]}`` where each entry captures msgid / msgstr / msgctxt.
+    """
+    with open(path, encoding="utf-8") as fh:
+        raw = fh.read()
+
+    entries = []
+    current = None
+    in_header = True
+
+    plural_forms = None
+
+    for block in re.split(r"\n\s*\n", raw):
+        block = block.strip()
+        if not block:
+            continue
+        # strip comment lines
+        lines = [ln for ln in block.splitlines() if not ln.startswith("#")]
+        if not lines:
+            continue
+        msgid = msgctxt = msgid_plural = None
+        msgstrs: list[str] = []
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith("msgid "):
+                msgid = _decode(line[len("msgid "):])
+            elif line.startswith("msgid_plural "):
+                msgid_plural = _decode(line[len("msgid_plural "):])
+            elif line.startswith("msgctxt "):
+                msgctxt = _decode(line[len("msgctxt "):])
+            elif line.startswith("msgstr"):
+                m = re.match(r'msgstr\[(\d+)\]\s*(.*)', line)
+                if m:
+                    idx = int(m.group(1))
+                    val = _decode(m.group(2))
+                    # continuation lines
+                    i += 1
+                    while i < len(lines) and not lines[i].startswith(
+                        ("msgid", "msgstr", "msgctxt")
+                    ):
+                        val += _decode(lines[i])
+                        i += 1
+                    while len(msgstrs) <= idx:
+                        msgstrs.append("")
+                    msgstrs[idx] = val
+                    continue
+                else:
+                    val = _decode(line[len("msgstr"):])
+                    i += 1
+                    while i < len(lines) and not lines[i].startswith(
+                        ("msgid", "msgstr", "msgctxt")
+                    ):
+                        val += _decode(lines[i])
+                        i += 1
+                    msgstrs = [val]
+                    continue
+            i += 1
+
+        if in_header and msgid == "":
+            # header entry
+            in_header = False
+            joined = "\n".join(msgstrs)
+            m = re.search(r'Plural-Forms:\s*(.*?)(?:\\n|$)', joined)
+            if m:
+                plural_forms = m.group(1).strip()
+            continue
+        in_header = False
+        if msgid is None:
+            continue
+        entries.append(
+            {
+                "msgid": msgid,
+                "msgctxt": msgctxt,
+                "msgid_plural": msgid_plural,
+                "msgstrs": msgstrs,
+            }
+        )
+
+    if plural_forms is None:
+        plural_forms = "nplurals=2; plural=(n != 1);"
+
+    return {"plural_forms": plural_forms, "entries": entries}
+
+
+def _decode(s: str) -> str:
+    s = s.strip()
+    if not s:
+        return ""
+    # naive unquote: remove surrounding quotes, process concatenations later
+    # handle multi-line: we already concatenated raw; here just unescape
+    if s.startswith('"') and s.endswith('"'):
+        s = s[1:-1]
+    return _unescape(s)
+
+
+def _unescape(s: str) -> str:
+    out = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            nxt = s[i + 1]
+            mapping = {
+                "n": "\n",
+                "t": "\t",
+                "r": "\r",
+                '"': '"',
+                "\\": "\\",
+            }
+            out.append(mapping.get(nxt, nxt))
+            i += 2
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# C plural-expression -> MoonBit
+# ---------------------------------------------------------------------------
+
+
+class Tok:
+    def __init__(self, kind, val=None):
+        self.kind = kind
+        self.val = val
+
+
+def tokenize(expr: str):
+    toks = []
+    i = 0
+    while i < len(expr):
+        c = expr[i]
+        if c.isspace():
+            i += 1
+            continue
+        if c == "(":
+            toks.append(Tok("lp"))
+            i += 1
+        elif c == ")":
+            toks.append(Tok("rp"))
+            i += 1
+        elif c == "?":
+            toks.append(Tok("?"))
+            i += 1
+        elif c == ":":
+            toks.append(Tok(":"))
+            i += 1
+        elif c == "%":
+            toks.append(Tok("%"))
+            i += 1
+        elif c == "&" and i + 1 < len(expr) and expr[i + 1] == "&":
+            toks.append(Tok("&&"))
+            i += 2
+        elif c == "|" and i + 1 < len(expr) and expr[i + 1] == "|":
+            toks.append(Tok("||"))
+            i += 2
+        elif c == "=" and i + 1 < len(expr) and expr[i + 1] == "=":
+            toks.append(Tok("=="))
+            i += 2
+        elif c == "!" and i + 1 < len(expr) and expr[i + 1] == "=":
+            toks.append(Tok("!="))
+            i += 2
+        elif c == "<" and i + 1 < len(expr) and expr[i + 1] == "=":
+            toks.append(Tok("<="))
+            i += 2
+        elif c == ">" and i + 1 < len(expr) and expr[i + 1] == "=":
+            toks.append(Tok(">="))
+            i += 2
+        elif c == "<":
+            toks.append(Tok("<"))
+            i += 1
+        elif c == ">":
+            toks.append(Tok(">"))
+            i += 1
+        elif c == "n":
+            toks.append(Tok("n"))
+            i += 1
+        elif c.isdigit():
+            j = i
+            while j < len(expr) and expr[j].isdigit():
+                j += 1
+            toks.append(Tok("num", int(expr[i:j])))
+            i = j
+        else:
+            i += 1
+    toks.append(Tok("eof"))
+    return toks
+
+
+class Parser:
+    def __init__(self, toks):
+        self.toks = toks
+        self.pos = 0
+
+    def peek(self):
+        return self.toks[self.pos]
+
+    def next(self):
+        t = self.toks[self.pos]
+        self.pos += 1
+        return t
+
+    def parse(self):
+        node = self.ternary()
+        return node
+
+    def ternary(self):
+        cond = self.orelse()
+        if self.peek().kind == "?":
+            self.next()
+            a = self.ternary()
+            self.expect(":")
+            b = self.ternary()
+            return ("tern", cond, a, b)
+        return cond
+
+    def orelse(self):
+        left = self.andexpr()
+        while self.peek().kind == "||":
+            self.next()
+            right = self.andexpr()
+            left = ("or", left, right)
+        return left
+
+    def andexpr(self):
+        left = self.cmpexpr()
+        while self.peek().kind == "&&":
+            self.next()
+            right = self.cmpexpr()
+            left = ("and", left, right)
+        return left
+
+    def cmpexpr(self):
+        left = self.multexpr()
+        while self.peek().kind in ("==", "!=", "<", ">", "<=", ">="):
+            op = self.next().kind
+            right = self.multexpr()
+            left = ("cmp", op, left, right)
+        return left
+
+    def multexpr(self):
+        left = self.primary()
+        while self.peek().kind == "%":
+            self.next()
+            right = self.primary()
+            left = ("mod", left, right)
+        return left
+
+    def primary(self):
+        t = self.peek()
+        if t.kind == "lp":
+            self.next()
+            node = self.ternary()
+            self.expect("rp")
+            return node
+        if t.kind == "n":
+            self.next()
+            return ("var",)
+        if t.kind == "num":
+            self.next()
+            return ("num", t.val)
+        raise ValueError(f"unexpected token {t.kind}")
+
+    def expect(self, kind):
+        if self.peek().kind != kind:
+            raise ValueError(f"expected {kind}")
+        self.next()
+
+
+def emit(node) -> str:
+    """Emit a MoonBit expression (Int-valued) for a parsed plural node."""
+    if node[0] == "tern":
+        _, cond, a, b = node
+        return f"if {emit(cond)} {{ {emit(a)} }} else {{ {emit(b)} }}"
+    if node[0] == "or":
+        return f"({emit(node[1])} || {emit(node[2])})"
+    if node[0] == "and":
+        return f"({emit(node[1])} && {emit(node[2])})"
+    if node[0] == "cmp":
+        return f"({emit(node[2])} {node[1]} {emit(node[3])})"
+    if node[0] == "mod":
+        return f"({emit(node[1])} % {emit(node[2])})"
+    if node[0] == "var":
+        return "n"
+    if node[0] == "num":
+        return str(node[1])
+    raise ValueError("bad node")
+
+
+def plural_to_moonbit(expr: str) -> str:
+    # extract the part after 'plural='
+    m = re.search(r"plural\s*=\s*(.+?)\s*;?\s*$", expr, re.IGNORECASE)
+    body = m.group(1) if m else expr
+    body = body.strip()
+    node = Parser(tokenize(body)).parse()
+    if node[0] == "tern":
+        return emit(node)
+    # boolean top-level -> map to 0/1
+    return f"if {emit(node)} {{ 1 }} else {{ 0 }}"
+
+
+# ---------------------------------------------------------------------------
+# Emit
+# ---------------------------------------------------------------------------
+
+
+def mb_str(s: str) -> str:
+    # produce a MoonBit string literal
+    return '"' + (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+    ) + '"'
+
+
+def emit_locale_map(name: str, items: list[tuple[str, str]]) -> str:
+    if not items:
+        return f"let {name} : Map[String, String] = Map::from_array([])\n"
+    pairs = ", ".join(f"({mb_str(k)}, {mb_str(v)})" for k, v in items)
+    return f"let {name} : Map[String, String] = Map::from_array([{pairs}])\n"
+
+
+def emit_locale_pluralmap(name: str, items: list[tuple[str, list[str]]]) -> str:
+    if not items:
+        return f"let {name} : Map[String, Array[String]] = Map::from_array([])\n"
+    parts = []
+    for k, arr in items:
+        inner = "[" + ", ".join(mb_str(x) for x in arr) + "]"
+        parts.append(f"({mb_str(k)}, {inner})")
+    pairs = ", ".join(parts)
+    return f"let {name} : Map[String, Array[String]] = Map::from_array([{pairs}])\n"
+
+
+def generate(locale_dir: str, out_path: str) -> None:
+    # collect locales
+    rows = []
+    for entry in sorted(os.listdir(locale_dir)):
+        po_path = os.path.join(locale_dir, entry, "LC_MESSAGES", "humanize.po")
+        if not os.path.isfile(po_path):
+            continue
+        if entry not in LOCALE_CTORS:
+            continue
+        data = read_po(po_path)
+        ctor = LOCALE_CTORS[entry]
+        rows.append((entry, ctor, data))
+
+    # Build per-locale tables
+    msg_maps = {}      # ctor -> [(msgid, msgstr)]
+    ctx_maps = {}      # ctor -> [(ctx\0msgid, msgstr)]
+    plur_maps = {}     # ctor -> [(singular, [forms])]
+    plural_fns = {}    # ctor -> moonbit expr
+
+    for entry, ctor, data in rows:
+        simple = []
+        ctx = []
+        plur = []
+        for e in data["entries"]:
+            mid = e["msgid"]
+            mp = e["msgid_plural"]
+            mstrs = e["msgstrs"]
+            if mp is not None:
+                # plural entry
+                forms = mstrs if mstrs else [mp, mp]
+                # pad
+                if not forms or all(f == "" for f in forms):
+                    forms = [mp, mp]
+                plur.append((mid, forms))
+            elif e["msgctxt"] is not None:
+                key = e["msgctxt"] + "\x00" + mid
+                val = mstrs[0] if mstrs else ""
+                ctx.append((key, val if val != "" else mid))
+            else:
+                val = mstrs[0] if mstrs else ""
+                simple.append((mid, val if val != "" else mid))
+        msg_maps[ctor] = simple
+        ctx_maps[ctor] = ctx
+        plur_maps[ctor] = plur
+        try:
+            plural_fns[ctor] = plural_to_moonbit(data["plural_forms"])
+        except Exception:
+            plural_fns[ctor] = "if n != 1 { 1 } else { 0 }"
+
+    out = []
+    out.append("// AUTO-GENERATED by scripts/po2mbt. DO NOT EDIT.\n")
+    out.append("// Source: src/humanize/locale/*/LC_MESSAGES/humanize.po\n")
+    out.append("// Regenerate with: scripts/po2mbt\n\n")
+
+    # separator maps (match chains - Locale cannot be a Map key without Eq/Hash)
+    out.append("// Thousands / decimal separators (mirror python-humanize i18n.py).\n")
+    out.append("pub fn thousands_sep_for(loc : Locale) -> String {\n")
+    out.append("  match loc {\n")
+    for k, v in THOUSANDS_SEP.items():
+        out.append(f"    {LOCALE_CTORS[k]} => \"{v}\"\n")
+    out.append("    _ => \",\"\n  }\n}\n\n")
+    out.append("pub fn decimal_sep_for(loc : Locale) -> String {\n")
+    out.append("  match loc {\n")
+    for k, v in DECIMAL_SEP.items():
+        out.append(f"    {LOCALE_CTORS[k]} => \"{v}\"\n")
+    out.append("    _ => \".\"\n  }\n}\n\n")
+
+    # plural index
+    out.append("/// Select the gettext plural form index for `n`.\n")
+    out.append("pub fn plural_index(loc : Locale, n : Int) -> Int {\n")
+    out.append("  match loc {\n")
+    for entry, ctor, _ in rows:
+        out.append(f"    {ctor} => {plural_fns[ctor]}\n")
+    out.append("  }\n")
+    out.append("}\n\n")
+
+    # per-locale map definitions
+    for entry, ctor, _ in rows:
+        out.append(emit_locale_map(f"msg_{ctor}", msg_maps[ctor]))
+    out.append("\n")
+    for entry, ctor, _ in rows:
+        out.append(emit_locale_map(f"ctx_{ctor}", ctx_maps[ctor]))
+    out.append("\n")
+    for entry, ctor, _ in rows:
+        out.append(emit_locale_pluralmap(f"plur_{ctor}", plur_maps[ctor]))
+    out.append("\n")
+
+    # lookup_message
+    out.append("pub fn lookup_message(loc : Locale, msg : String, default : String) -> String {\n")
+    out.append("  match loc {\n")
+    for entry, ctor, _ in rows:
+        out.append(f"    {ctor} => match msg_{ctor}.get(msg) {{\n")
+        out.append("      Some(s) => s\n      None => default\n    }\n")
+    out.append("  }\n}\n\n")
+
+    # lookup_context
+    out.append(
+        "pub fn lookup_context("
+        "loc : Locale, ctx : String, msg : String, default : String) -> String {\n"
+    )
+    out.append("  let key = ctx + \"\\u{0}\" + msg\n")
+    out.append("  match loc {\n")
+    for entry, ctor, _ in rows:
+        out.append(f"    {ctor} => match ctx_{ctor}.get(key) {{\n")
+        out.append("      Some(s) => s\n      None => default\n    }\n")
+    out.append("  }\n}\n\n")
+
+    # lookup_plural
+    out.append(
+        "pub fn lookup_plural("
+        "loc : Locale, singular : String, _plural : String, form : Int, default : String) -> String {\n"
+    )
+    out.append("  match loc {\n")
+    for entry, ctor, _ in rows:
+        out.append(f"    {ctor} => match plur_{ctor}.get(singular) {{\n")
+        out.append("      Some(arr) => if form >= 0 && form < arr.length() {\n")
+        out.append("        arr[form]\n      } else {\n        default\n      }\n")
+        out.append("      None => default\n    }\n")
+    out.append("  }\n}\n")
+
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write("".join(out))
+
+
+def main() -> int:
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo = os.path.dirname(here)
+    default_locale = os.path.join(repo, "src", "humanize", "locale")
+    default_out = os.path.join(
+        repo, "moonbit", "src", "humanize", "i18n_data.mbt"
+    )
+    locale_dir = sys.argv[1] if len(sys.argv) > 1 else default_locale
+    out_path = sys.argv[2] if len(sys.argv) > 2 else default_out
+    generate(locale_dir, out_path)
+    print(f"wrote {out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

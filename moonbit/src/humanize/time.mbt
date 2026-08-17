@@ -214,10 +214,10 @@ pub fn naturaldelta(
         let ms = d.microseconds / 1000
         return _nunit(ms, "millisecond", "milliseconds")
       }
-      return "a moment"
+      return gettext("a moment")
     }
     if d.seconds == 1 {
-      return "a second"
+      return gettext("a second")
     }
     if d.seconds < 60 {
       return _nunit(d.seconds, "second", "seconds")
@@ -225,26 +225,26 @@ pub fn naturaldelta(
     if 60 <= d.seconds && d.seconds < 3600 {
       let minutes = @math.round(d.seconds.to_double() / 60.0).to_int()
       if minutes == 1 {
-        return "a minute"
+        return gettext("a minute")
       }
       if minutes == 60 {
-        return "an hour"
+        return gettext("an hour")
       }
       return _nunit(minutes, "minute", "minutes")
     }
     if 3600 <= d.seconds {
       let hours = @math.round(d.seconds.to_double() / 3600.0).to_int()
       if hours == 1 {
-        return "an hour"
+        return gettext("an hour")
       }
       if hours == 24 {
-        return "a day"
+        return gettext("a day")
       }
       return _nunit(hours, "hour", "hours")
     }
   } else if years == 0 {
     if days == 1 {
-      return "a day"
+      return gettext("a day")
     }
     if !(use_months) {
       return _nunit(days, "day", "days")
@@ -253,22 +253,22 @@ pub fn naturaldelta(
       return _nunit(days, "day", "days")
     }
     if num_months == 1 {
-      return "a month"
+      return gettext("a month")
     }
     if num_months == 12 {
-      return "a year"
+      return gettext("a year")
     }
     return _nunit(num_months, "month", "months")
   } else if years == 1 {
     if num_months == 0 && days == 0 {
-      return "a year"
+      return gettext("a year")
     }
     if num_months == 0 {
       return _nyear_days(days)
     }
     if use_months {
       if num_months == 1 {
-        return "1 year, 1 month"
+        return gettext("1 year, 1 month")
       }
       if num_months == 12 {
         return _nunit(2, "year", "years")
@@ -281,28 +281,31 @@ pub fn naturaldelta(
 }
 
 fn _nunit(n : Int, singular : String, plural : String) -> String {
-  if n == 1 { "1 " + singular } else { n.to_string() + " " + plural }
+  let word = ngettext(singular, plural, n)
+  if n == 1 { "1 " + word } else { n.to_string() + " " + word }
 }
 
 fn _nyear_days(days : Int) -> String {
   if days == 1 {
-    "1 year, 1 day"
+    gettext("1 year, 1 day")
   } else {
-    "1 year, " + days.to_string() + " days"
+    gettext("1 year, ") + days.to_string() + " " + ngettext("day", "days", days)
   }
 }
 
 fn _nyear_months(months : Int) -> String {
   if months == 1 {
-    "1 year, 1 month"
+    gettext("1 year, 1 month")
   } else {
-    "1 year, " + months.to_string() + " months"
+    gettext("1 year, ") + months.to_string() + " " +
+      ngettext("month", "months", months)
   }
 }
 
 // Years >= 2: use intcomma for thousands separators.
 fn _nunit_big(n : Int, singular : String, plural : String) -> String {
-  if n == 1 { "1 " + singular } else { intcomma(n.to_string()) + " " + plural }
+  let word = ngettext(singular, plural, n)
+  if n == 1 { "1 " + word } else { intcomma(n.to_string()) + " " + word }
 }
 
 // ---------------------------------------------------------------------------
@@ -327,13 +330,13 @@ pub fn naturaltime(
     }
   }
   let base = naturaldelta(TimeInput::Delta(delta), months~, minimum_unit~)
-  if base == "a moment" {
-    return "now"
+  if base == gettext("a moment") {
+    return gettext("now")
   }
   if is_future || future {
-    base + " from now"
+    base + gettext(" from now")
   } else {
-    base + " ago"
+    base + gettext(" ago")
   }
 }
 
@@ -357,13 +360,13 @@ pub fn naturalday(
 ) -> String {
   let d = _date_diff_days(value, when)
   if d == 0 {
-    return "today"
+    return gettext("today")
   }
   if d == 1 {
-    return "tomorrow"
+    return gettext("tomorrow")
   }
   if d == -1 {
-    return "yesterday"
+    return gettext("yesterday")
   }
   _format_date(value, format)
 }
@@ -376,13 +379,13 @@ pub fn naturaldate(
 ) -> String {
   let d = _date_diff_days(value, when)
   if d == 0 {
-    return "today"
+    return gettext("today")
   }
   if d == 1 {
-    return "tomorrow"
+    return gettext("tomorrow")
   }
   if d == -1 {
-    return "yesterday"
+    return gettext("yesterday")
   }
   if value.year != when.year {
     _format_date(value, "%b %d %Y")
@@ -592,24 +595,27 @@ pub fn precisedelta(
       // Mirror Python: fmt_value forced to 2 when 1 < v < 2, else int(v).
       let _fmt_value =
         if 1.0 < fmt_value && fmt_value < 2.0 { 2.0 } else { @math.floor(fmt_value) }
+      let count = @math.floor(_fmt_value).to_int()
+      // Translations use gettext plural selection on the integer count.
+      let word = ngettext(singular, plural, count)
       let is_min = TimeUnit::same(unit, min_unit)
       let text =
         if is_min && _is_fractional(fmt_value) {
           // format applied to the original (fractional) value
-          _format_value(fmt_value, format) + " " + plural
+          _format_value(fmt_value, format) + " " + ngettext(singular, plural, 2)
         } else if TimeUnit::same(unit, YEARS) {
           // years rendered with intcomma as an integer, singular at 1
           if _fmt_value == 1.0 {
-            "1 year"
+            "1 " + ngettext(singular, plural, 1)
           } else {
-            intcomma(@math.floor(fmt_value).to_int().to_string()) + " " + plural
+            intcomma(@math.floor(fmt_value).to_int().to_string()) + " " + word
           }
         } else if _fmt_value == 1.0 {
           // singular
-          "1 " + singular
+          "1 " + ngettext(singular, plural, 1)
         } else {
           // plural, integer-valued (truncated)
-          @math.floor(fmt_value).to_int().to_string() + " " + plural
+          @math.floor(fmt_value).to_int().to_string() + " " + word
         }
       texts = texts + [text]
     }
@@ -621,9 +627,9 @@ pub fn precisedelta(
 
   if texts.length() == 0 {
     if TimeUnit::same(min_unit, TimeUnit::YEARS) {
-      texts = ["0 years"]
+      texts = [ngettext("year", "years", 0)]
     } else {
-      texts = ["0 " + min_unit.noun() + "s"]
+      texts = ["0 " + ngettext(min_unit.noun(), min_unit.noun() + "s", 0)]
     }
   }
 
@@ -642,15 +648,15 @@ fn _join_precise(ordered : Array[String]) -> String {
     return ordered[0]
   }
   if n == 2 {
-    return ordered[0] + " and " + ordered[1]
+    return ordered[0] + gettext(" and ") + ordered[1]
   }
   let mut acc = ordered[0]
   let mut i = 1
   while i < n - 1 {
-    acc = acc + ", " + ordered[i]
+    acc = acc + gettext(", ") + ordered[i]
     i = i + 1
   }
-  acc + " and " + ordered[n - 1]
+  acc + gettext(" and ") + ordered[n - 1]
 }
 
 fn _lookup(fmts : Array[(TimeUnit, Double)], u : TimeUnit) -> Double {
