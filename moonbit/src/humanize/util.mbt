@@ -38,8 +38,8 @@ pub fn format_fixed(value : Double, digits : Int) -> String {
   let scaled = abs * scale + 0.5
   let trunc = @math.floor(scaled).to_int()
   let s = trunc.to_string()
-  let int_part : String
-  let frac_part : String
+  let mut int_part : String = ""
+  let mut frac_part : String = ""
   if s.length() <= digits {
     int_part = "0"
     frac_part = "0".repeat(digits - s.length()) + s
@@ -57,8 +57,17 @@ pub fn format_fixed(value : Double, digits : Int) -> String {
 
 fn pow10_double(n : Int) -> Double {
   let mut r = 1.0
-  for i = 0; i < n; i = i + 1 {
-    r = r * 10.0
+  let mut i = 0
+  if n >= 0 {
+    while i < n {
+      r = r * 10.0
+      i = i + 1
+    }
+  } else {
+    while i > n {
+      r = r / 10.0
+      i = i - 1
+    }
   }
   r
 }

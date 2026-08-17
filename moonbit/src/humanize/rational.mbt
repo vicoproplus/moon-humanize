@@ -10,7 +10,7 @@
 pub struct Rational {
   numer : Int
   denom : Int
-} derive(Show)
+}
 
 /// Greatest common divisor (Euclidean), always non-negative.
 fn gcd(a : Int, b : Int) -> Int {

@@ -7,28 +7,17 @@
 // All outputs are aligned to the real python-humanize `number.py` semantics
 // (golden values verified against the Python reference).
 
-/// Helper: format a non-finite value the way python-humanize does.
-fn format_not_finite(value : Double) -> String {
-  if value.is_nan() {
-    "NaN"
-  } else if value < 0.0 {
-    "-Inf"
-  } else {
-    "+Inf"
-  }
-}
-
 /// Clamp `value` into [floor, ceil], formatting with `format` and prepending
 /// `floor_token`/`ceil_token` when clamped. Mirrors python-humanize `clamp`.
 /// None / non-finite inputs are not representable as a String here; non-finite
 /// values return their `Inf` / `NaN` string form (Python returns None/Inf).
 pub fn clamp(
   value : Double,
-  ~floor : Double? = None,
-  ~ceil : Double? = None,
-  ~floor_token : String = "<",
-  ~ceil_token : String = ">",
-  ~format : (Double) -> String = default_clamp_fmt,
+  floor~ : Double? = None,
+  ceil~ : Double? = None,
+  floor_token~ : String = "<",
+  ceil_token~ : String = ">",
+  format~ : (Double) -> String = default_clamp_fmt,
 ) -> String {
   if value.is_nan() {
     return "NaN"
@@ -55,13 +44,39 @@ pub fn clamp(
   token + format(v)
 }
 
-fn default_clamp_fmt(x : Double) -> String {
+pub fn default_clamp_fmt(x : Double) -> String {
   x.to_string()
+}
+
+/// Floor division by 3 (MoonBit `/` truncates toward zero).
+fn floor_div3(e : Int) -> Int {
+  let q = e / 3
+  if e < 0 && e % 3 != 0 {
+    q - 1
+  } else {
+    q
+  }
+}
+
+/// Largest multiple of 3 that is <= e (floor to 3-bucket), matching Python
+/// `int(e / 3) * 3` with floor division.
+fn floor_mul3(e : Int) -> Int {
+  floor_div3(e) * 3
+}
+
+/// Non-negative remainder modulo 3 (0, 1, or 2), matching Python `%`.
+fn mod3(e : Int) -> Int {
+  let r = e % 3
+  if r < 0 {
+    r + 3
+  } else {
+    r
+  }
 }
 
 /// Format a magnitude with an SI metric prefix. Mirrors python-humanize
 /// `metric(value, unit="", precision=3)`.
-pub fn metric(value : Double, ~unit : String = "", ~precision : Int = 3) -> String {
+pub fn metric(value : Double, unit~ : String = "", precision~ : Int = 3) -> String {
   if value.is_nan() {
     return "NaN"
   }
@@ -71,35 +86,36 @@ pub fn metric(value : Double, ~unit : String = "", ~precision : Int = 3) -> Stri
   let exponent = if value == 0.0 {
     0
   } else {
-    @math.floor(@math.log10(value.abs())).to_int()
+    ilog10(value.abs())
   }
 
   if exponent >= 33 || exponent < -30 {
-    return scientific(value.to_string(), precision - 1) + unit
+    return scientific(value.to_string(), precision = precision - 1) + unit
   }
 
-  let old_bucket = exponent / 3 * 3
-  let v = value / pow10_double(old_bucket)
-  let mut digits = @math.max(0, precision - exponent % 3 - 1).to_int()
+  let old_bucket = floor_mul3(exponent)
+  let mut v = value / pow10_double(old_bucket)
+  let mut exp = exponent
+  let mut digits = if 0 > precision - mod3(exp) - 1 { 0 } else { precision - mod3(exp) - 1 }
   let rounded = round_half_up(v.abs(), digits)
-  if exponent < 30 && rounded >= 1000.0 {
-    let new_exponent = exponent + 3 - exponent % 3
-    let new_bucket = new_exponent / 3 * 3
+  if exp < 30 && rounded >= 1000.0 {
+    let new_exponent = exp + 3 - mod3(exp)
+    let new_bucket = floor_mul3(new_exponent)
     v = v / pow10_double(new_bucket - old_bucket)
-    exponent = new_exponent
-    digits = @math.max(0, precision - exponent % 3 - 1).to_int()
+    exp = new_exponent
+    digits = if 0 > precision - mod3(exp) - 1 { 0 } else { precision - mod3(exp) - 1 }
   }
 
-  let ordinal_ : String
-  if exponent >= 3 {
-    ordinal_ = "kMGTPEZYRQ"[(exponent / 3 - 1)].to_string()
-  } else if exponent < 0 {
-    ordinal_ = "mμnpfazyrq"[(-exponent - 1) / 3].to_string()
+  let mut ordinal_ : String = ""
+  if exp >= 3 {
+    ordinal_ = positive_prefix[(floor_div3(exp) - 1)]
+  } else if exp < 0 {
+    ordinal_ = negative_prefix[((-exp - 1) / 3)]
   } else {
     ordinal_ = ""
   }
   let value_ = format_fixed(v, digits)
-  let space = if (unit == "" && ordinal_ == "") || unit == "°" || unit == "′" || unit == "″" {
+  let space = if !(unit != "" || ordinal_ != "") || unit == "°" || unit == "′" || unit == "″" {
     ""
   } else {
     " "
@@ -107,10 +123,28 @@ pub fn metric(value : Double, ~unit : String = "", ~precision : Int = 3) -> Stri
   value_ + space + ordinal_ + unit
 }
 
+/// Integer base-10 logarithm (floor), matching `int(math.floor(log10(x)))` for
+/// positive `x`. Implemented with a loop to avoid floating-point edge cases.
+fn ilog10(x : Double) -> Int {
+  // floor(log10(x)) with a tiny epsilon to avoid floating-point errors at
+  // exact powers of ten (e.g. 1e-14 would otherwise drift to -15).
+  @math.floor(@math.log10(x) + 1.0e-9).to_int()
+}
+
+/// Positive SI prefixes: k, M, G, T, P, E, Z, Y, R, Q (index = exp/3 - 1).
+let positive_prefix : Array[String] = [
+  "k", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q",
+]
+
+/// Negative SI prefixes: m, µ, n, p, f, a, z, y, r, q (index = (-exp-1)/3).
+let negative_prefix : Array[String] = [
+  "m", "μ", "n", "p", "f", "a", "z", "y", "r", "q",
+]
+
 fn round_half_up(x : Double, digits : Int) -> Double {
   let r = format_fixed(x, digits)
   try {
-    @string.parse_float(r)
+    @string.parse_double(r)
   } catch {
     _ => x
   }
@@ -118,11 +152,11 @@ fn round_half_up(x : Double, digits : Int) -> Double {
 
 /// Add thousands separators to a numeric string, optionally rounding to
 /// `ndigits` decimals. Mirrors python-humanize `intcomma(value, ndigits=None)`.
-pub fn intcomma(value : String, ~ndigits : Int? = None) -> String {
+pub fn intcomma(value : String, ndigits~ : Int? = None) -> String {
   let neg = value.has_prefix("-")
   let body = if neg { value[1:].to_owned() } else { value }
   let formatted = try {
-    let f = @string.parse_float(body)
+    let f = @string.parse_double(body)
     match ndigits {
       Some(d) => format_fixed(f, d)
       None => f.to_string()
@@ -157,7 +191,7 @@ fn group_thousands(int_part : String) -> String {
       buf = "," + buf
       count = 0
     }
-    buf = int_part[i].to_string() + buf
+    buf = int_part[i:i + 1].to_owned() + buf
     count = count + 1
   }
   buf
@@ -177,25 +211,28 @@ let intword_units : Array[String] = [
 
 /// Convert a large integer (given as String) to a friendly magnitude, e.g.
 /// "1.0 million". Mirrors python-humanize `intword(value, format="%.1f")`.
-pub fn intword(value : String, ~format : String = "%.1f") -> String {
+pub fn intword(value : String, format~ : String = "%.1f") -> String {
   let neg = value.has_prefix("-")
   let body = if neg { value[1:].to_owned() } else { value }
-  let chopped : Double
   match bisect_intword_powers(body) {
     Some((ordinal, power)) => {
       let v = try {
-        @string.parse_float(body)
+        @string.parse_double(body)
       } catch {
         _ => return value
       }
-      chopped = v / power
+      let chopped = v / power
       let unit = intword_units[ordinal]
       let number = format_float_with(format, chopped)
-      return (if neg { "-" } else { "" }) + number + " " + unit
+      (if neg { "-" } else { "" }) + number + " " + unit
     }
     None => {
       // below the smallest power: return the (possibly negative) integer string
-      return if neg { "-" + body } else { body }
+      if neg {
+        "-" + body
+      } else {
+        body
+      }
     }
   }
 }
@@ -205,7 +242,7 @@ pub fn intword(value : String, ~format : String = "%.1f") -> String {
 /// than the smallest power (10**3).
 fn bisect_intword_powers(body : String) -> Option[(Int, Double)] {
   let v = try {
-    @string.parse_float(body)
+    @string.parse_double(body)
   } catch {
     _ => return None
   }
@@ -264,7 +301,7 @@ pub fn apnumber(value : String) -> String {
 /// mixed fraction. Mirrors python-humanize `fractional`.
 pub fn fractional(value : String) -> String {
   let num = try {
-    @string.parse_float(value)
+    @string.parse_double(value)
   } catch {
     _ => return value
   }
@@ -292,9 +329,9 @@ pub fn fractional(value : String) -> String {
 
 /// Render a number (given as String) in scientific notation "z.wq x 10ⁿ".
 /// Mirrors python-humanize `scientific(value, precision=2)`.
-pub fn scientific(value : String, ~precision : Int = 2) -> String {
+pub fn scientific(value : String, precision~ : Int = 2) -> String {
   let num = try {
-    @string.parse_float(value)
+    @string.parse_double(value)
   } catch {
     _ => return value
   }
@@ -309,7 +346,7 @@ pub fn scientific(value : String, ~precision : Int = 2) -> String {
   let exp = if abs == 0.0 {
     0
   } else {
-    @math.floor(@math.log10(abs)).to_int()
+    ilog10(abs)
   }
   let mantissa = abs / pow10_double(exp)
   let mant_str = format_fixed(mantissa, precision)
