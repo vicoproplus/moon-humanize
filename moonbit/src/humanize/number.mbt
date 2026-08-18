@@ -410,9 +410,14 @@ pub fn to_decimal(value : Double, decimals~ : Int = 2) -> String {
   let int_part = scaled / denom
   let frac_part = scaled % denom
   let int_str = group_thousands(int_part.to_string())
-  let frac_str = pad_left(frac_part.to_string(), decimals, '0')
-  let body = int_str + "." + frac_str
-  if neg { "-" + body } else { body }
+  // decimals == 0: render the integer only, no trailing "." + empty fraction.
+  if decimals == 0 {
+    if neg { "-" + int_str } else { int_str }
+  } else {
+    let frac_str = pad_left(frac_part.to_string(), decimals, '0')
+    let body = int_str + "." + frac_str
+    if neg { "-" + body } else { body }
+  }
 }
 
 /// Spell out an integer in English cardinal words, e.g. `123` -> `"one hundred and twenty-three"`.
@@ -512,26 +517,13 @@ fn pad_left(s : String, width : Int, ch : Char) -> String {
   prefix + s
 }
 
-/// Map a power-of-ten exponent to its localized magnitude word id (used by the
-/// localized `scientific`). Falls back to the raw exponent string for powers
-/// not covered by the catalog.
-fn exponent_word_id(exponent : Int) -> MsgKey {
-  match exponent {
-    3 => EXPword1
-    6 => EXPword2
-    9 => EXPword3
-    12 => EXPword4
-    15 => EXPword5
-    18 => EXPword6
-    _ => EXPword1
-  }
-}
-
 /// Format a real number in scientific notation, localized via the i18n catalog.
 ///
 /// Uses the `scientific_tmpl` message (`"%s x 10^%s"` for en, `"%s × 10^%s"`
-/// for ru_RU, `"%s×10^%s"` for zh/zh_CN) and substitutes the mantissa and a
-/// localized magnitude word for the exponent when available.
+/// for ru_RU, `"%s×10^%s"` for zh/zh_CN) and substitutes the mantissa and the
+/// exponent (as a plain decimal number) into the localized connector. The
+/// exponent is always rendered as digits (e.g. `10^3`); only the connector
+/// between mantissa and `10^` is localized.
 pub fn scientific_localized(
   value : Double,
   precision~ : Int = 6,
@@ -543,12 +535,7 @@ pub fn scientific_localized(
 ) -> String {
   let mantissa = value / pow10_double(exponent)
   let m = format_fixed(mantissa, precision)
-  let exp_words = msg_str(locale, exponent_word_id(exponent)).to_string()
-  let exp_repr = if exp_words == "" {
-    exponent.to_string()
-  } else {
-    exp_words
-  }
+  let exp_repr = exponent.to_string()
   msg_str(locale, SCItmpl).format([m, exp_repr])
 }
 

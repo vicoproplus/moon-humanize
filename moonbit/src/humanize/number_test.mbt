@@ -122,7 +122,8 @@ test "number python parity" {
 test "to_scientific" {
   @test.assert_eq(to_scientific(3141.59, precision=2, exponent=3), "3.14 x 10^3")
   @test.assert_eq(to_scientific(500.0, precision=2, exponent=2), "5.00 x 10^2")
-  @test.assert_eq(to_scientific(0.789, precision=2, exponent=-3), "0.79 x 10^-3")
+  // mantissa = value / 10^exponent = 0.789 / 10^-3 = 789 (precision 2 -> "789.00")
+  @test.assert_eq(to_scientific(0.789, precision=2, exponent=-3), "789.00 x 10^-3")
 }
 
 test "to_decimal" {
