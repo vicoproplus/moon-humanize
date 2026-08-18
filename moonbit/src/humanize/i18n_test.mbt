@@ -64,3 +64,24 @@ test "i18n pgettext context" {
   assert_true(ctx.length() > 0)
   deactivate()
 }
+
+test "i18n T7 user-visible units are translated" {
+  // Regression for BUG 3: humanizer output must reach the translations.
+  // fr_FR maps "%d second" -> "%d seconde" / "%d secondes".
+  ignore(activate("fr_FR"))
+  let out = naturaldelta(TimeInput::from_seconds(5.0))
+  // 5 seconds -> French plural "5 secondes" (not English "5 seconds").
+  assert_true(out.contains("seconde"))
+  assert_false(out.contains("5 seconds"))
+  deactivate()
+}
+
+test "i18n T7 thousands separator respected by intcomma" {
+  // Regression for BUG 3: intcomma must use the locale's thousands separator.
+  // de_DE uses "." as thousands separator (not ",").
+  ignore(activate("de_DE"))
+  let grouped = intcomma("1234567")
+  assert_true(grouped.contains("."))
+  assert_false(grouped.contains(",234"))
+  deactivate()
+}

@@ -41,29 +41,29 @@ pub fn plural_index(loc : Locale, n : Int) -> Int {
     Eu => if (n != 1) { 1 } else { 0 }
     FaIR => if (n != 1) { 1 } else { 0 }
     FiFI => if (n != 1) { 1 } else { 0 }
-    FrFR => if (n != 1) { 1 } else { 0 }
+    FrFR => if (n > 1) { 1 } else { 0 }
     HeIL => if (n != 1) { 1 } else { 0 }
     HuHU => if (n != 1) { 1 } else { 0 }
-    IdID => if (n != 1) { 1 } else { 0 }
+    IdID => 0
     ItIT => if (n != 1) { 1 } else { 0 }
-    JaJP => if (n != 1) { 1 } else { 0 }
-    KoKR => if (n != 1) { 1 } else { 0 }
+    JaJP => 0
+    KoKR => if (n > 1) { 1 } else { 0 }
     Lv => if (((n % 10) == 1) && ((n % 100) != 11)) { 0 } else { if (n != 0) { 1 } else { 2 } }
     Nb => if (n != 1) { 1 } else { 0 }
     NlNL => if (n != 1) { 1 } else { 0 }
     PlPL => if (n == 1) { 0 } else { if ((((n % 10) >= 2) && ((n % 10) <= 4)) && (((n % 100) < 10) || ((n % 100) >= 20))) { 1 } else { 2 } }
-    PtBR => if (n != 1) { 1 } else { 0 }
-    PtPT => if (n != 1) { 1 } else { 0 }
-    RuRU => if (n != 1) { 1 } else { 0 }
+    PtBR => if (n > 1) { 1 } else { 0 }
+    PtPT => if (n > 1) { 1 } else { 0 }
+    RuRU => if (((n % 10) == 1) && ((n % 100) != 11)) { 0 } else { if ((((n % 10) >= 2) && ((n % 10) <= 4)) && (((n % 100) < 10) || ((n % 100) >= 20))) { 1 } else { 2 } }
     SiLK => if (n > 1) { 1 } else { 0 }
     SkSK => if (n == 1) { 0 } else { if ((n >= 2) && (n <= 4)) { 1 } else { 2 } }
-    SlSI => if (n != 1) { 1 } else { 0 }
+    SlSI => if ((n % 100) == 1) { 0 } else { if ((n % 100) == 2) { 1 } else { if (((n % 100) == 3) || ((n % 100) == 4)) { 2 } else { 3 } } }
     SvSE => if (n != 1) { 1 } else { 0 }
     Tlh => if (n > 1) { 1 } else { 0 }
     TrTR => if (n != 1) { 1 } else { 0 }
-    UkUA => if (n != 1) { 1 } else { 0 }
+    UkUA => if (((n % 10) == 1) && ((n % 100) != 11)) { 0 } else { if ((((n % 10) >= 2) && ((n % 10) <= 4)) && (((n % 100) < 10) || ((n % 100) >= 20))) { 1 } else { 2 } }
     Uz => if (n != 1) { 1 } else { 0 }
-    ViVN => if (n != 1) { 1 } else { 0 }
+    ViVN => if (n > 1) { 1 } else { 0 }
     ZhCN => if (n > 1) { 1 } else { 0 }
     ZhHK => if (n > 1) { 1 } else { 0 }
   }

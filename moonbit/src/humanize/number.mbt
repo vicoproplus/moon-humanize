@@ -183,12 +183,15 @@ fn group_thousands(int_part : String) -> String {
   if int_part.length() <= 3 {
     return int_part
   }
+  // Use the active locale's thousands separator (e.g. "." for de_DE),
+  // defaulting to "," when no locale is active.
+  let sep = thousands_separator()
   let mut buf = ""
   let len = int_part.length()
   let mut count = 0
   for i = len - 1; i >= 0; i = i - 1 {
     if count == 3 {
-      buf = "," + buf
+      buf = sep + buf
       count = 0
     }
     buf = int_part[i:i + 1].to_owned() + buf

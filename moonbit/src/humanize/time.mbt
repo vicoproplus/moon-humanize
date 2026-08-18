@@ -146,6 +146,40 @@ fn TimeUnit::noun(self : TimeUnit) -> String {
   }
 }
 
+// Substitute the first "%d" placeholder in `s` with `repl`. The python-humanize
+// `.po` msgids follow the gettext convention `"%d second"` / `"%d seconds"`;
+// after translation we fill in the count. A manual scan (rather than relying on
+// a `String::replace` availability) keeps this version-agnostic.
+fn replace_first_d(s : String, repl : String) -> String {
+  let chars = s.to_array()
+  let n = chars.length()
+  let mut i = 0
+  while i < n - 1 {
+    if chars[i] == '%' && chars[i + 1] == 'd' {
+      return String::from_array(chars[0:i]) + repl +
+        String::from_array(chars[i + 2:n])
+    }
+    i = i + 1
+  }
+  s
+}
+
+// Localized unit noun (without the count) for `precisedelta` / year combos.
+// Mirrors python-humanize, whose `.po` msgids are `"%d second"` /
+// `"%d seconds"`; the count is stripped so callers can prepend a (possibly
+// grouped) number themselves.
+fn _plural_unit_text(unit : TimeUnit, count : Int) -> String {
+  let singular = unit.noun()
+  let word = ngettext("%d " + singular, "%d " + singular + "s", count)
+  // Drop the leading "%d " placeholder so only the unit word remains.
+  let chars = word.to_array()
+  if chars.length() >= 3 && chars[0] == '%' && chars[1] == 'd' && chars[2] == ' ' {
+    String::from_array(chars[3:])
+  } else {
+    word
+  }
+}
+
 fn TimeUnit::ordinal(self : TimeUnit) -> Int {
   match self {
     TimeUnit::MICROSECONDS => 0
@@ -281,15 +315,20 @@ pub fn naturaldelta(
 }
 
 fn _nunit(n : Int, singular : String, plural : String) -> String {
-  let word = ngettext(singular, plural, n)
-  if n == 1 { "1 " + word } else { n.to_string() + " " + word }
+  // Look up the python gettext msgids ("%d second" / "%d seconds") and fill
+  // in the count so localized unit forms render correctly.
+  let word = ngettext("%d " + singular, "%d " + plural, n)
+  replace_first_d(word, n.to_string())
 }
 
 fn _nyear_days(days : Int) -> String {
   if days == 1 {
     gettext("1 year, 1 day")
   } else {
-    gettext("1 year, ") + days.to_string() + " " + ngettext("day", "days", days)
+    gettext("1 year, ") + days.to_string() + " " + _plural_unit_text(
+      TimeUnit::DAYS,
+      days,
+    )
   }
 }
 
@@ -297,15 +336,19 @@ fn _nyear_months(months : Int) -> String {
   if months == 1 {
     gettext("1 year, 1 month")
   } else {
-    gettext("1 year, ") + months.to_string() + " " +
-      ngettext("month", "months", months)
+    gettext("1 year, ") + months.to_string() + " " + _plural_unit_text(
+      TimeUnit::MONTHS,
+      months,
+    )
   }
 }
 
 // Years >= 2: use intcomma for thousands separators.
 fn _nunit_big(n : Int, singular : String, plural : String) -> String {
-  let word = ngettext(singular, plural, n)
-  if n == 1 { "1 " + word } else { intcomma(n.to_string()) + " " + word }
+  // Like `_nunit`, but the count is grouped with the locale's thousands
+  // separator (handled by `intcomma`).
+  let word = ngettext("%d " + singular, "%d " + plural, n)
+  replace_first_d(word, intcomma(n.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -590,32 +633,30 @@ pub fn precisedelta(
     let unit = order2[oi]
     let fmt_value = _lookup(fmts, unit)
     if fmt_value > 0.0 || (texts.length() == 0 && TimeUnit::same(unit, min_unit)) {
-      let singular = unit.noun()
-      let plural = singular + "s"
       // Mirror Python: fmt_value forced to 2 when 1 < v < 2, else int(v).
       let _fmt_value =
         if 1.0 < fmt_value && fmt_value < 2.0 { 2.0 } else { @math.floor(fmt_value) }
       let count = @math.floor(_fmt_value).to_int()
-      // Translations use gettext plural selection on the integer count.
-      let word = ngettext(singular, plural, count)
       let is_min = TimeUnit::same(unit, min_unit)
       let text =
         if is_min && _is_fractional(fmt_value) {
-          // format applied to the original (fractional) value
-          _format_value(fmt_value, format) + " " + ngettext(singular, plural, 2)
+          // format applied to the original (fractional) value; plural form
+          _format_value(fmt_value, format) + " " + _plural_unit_text(unit, 2)
         } else if TimeUnit::same(unit, YEARS) {
-          // years rendered with intcomma as an integer, singular at 1
+          // years rendered with intcomma (locale thousands sep) as integer
           if _fmt_value == 1.0 {
-            "1 " + ngettext(singular, plural, 1)
+            "1 " + _plural_unit_text(unit, 1)
           } else {
-            intcomma(@math.floor(fmt_value).to_int().to_string()) + " " + word
+            intcomma(@math.floor(fmt_value).to_int().to_string()) + " " +
+              _plural_unit_text(unit, count)
           }
         } else if _fmt_value == 1.0 {
           // singular
-          "1 " + ngettext(singular, plural, 1)
+          "1 " + _plural_unit_text(unit, 1)
         } else {
           // plural, integer-valued (truncated)
-          @math.floor(fmt_value).to_int().to_string() + " " + word
+          @math.floor(fmt_value).to_int().to_string() + " " +
+            _plural_unit_text(unit, count)
         }
       texts = texts + [text]
     }
@@ -627,9 +668,9 @@ pub fn precisedelta(
 
   if texts.length() == 0 {
     if TimeUnit::same(min_unit, TimeUnit::YEARS) {
-      texts = [ngettext("year", "years", 0)]
+      texts = [_plural_unit_text(TimeUnit::YEARS, 0)]
     } else {
-      texts = ["0 " + ngettext(min_unit.noun(), min_unit.noun() + "s", 0)]
+      texts = ["0 " + _plural_unit_text(min_unit, 0)]
     }
   }
 

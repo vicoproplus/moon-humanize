@@ -2,7 +2,18 @@ import {
   "moonbitlang/core/math",
   "moonbitlang/core/bigint",
   "moonbitlang/core/string",
+  "moonbitlang/core/env",
 }
 import {
   "moonbitlang/core/test",
 } for "test"
+
+// `clock_wasm.mbt` defines `now()` (current time in ns) using `@env.now()`
+// from moonbitlang/core/env, so it is compiled only for the wasm / wasm-gc
+// backends. The native target has no wall-clock wiring, mirroring
+// python-humanize where `now()` is wasm-only.
+options(
+  targets: {
+    "clock_wasm.mbt": [ "wasm", "wasm-gc" ],
+  },
+)
