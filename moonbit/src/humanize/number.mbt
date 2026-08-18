@@ -371,7 +371,7 @@ pub fn scientific(value : String, precision~ : Int = 2) -> String {
 /// The free `scientific(value : Double, ~precision, ~exponent, ~locale)`
 /// function below is the default, generic implementation.
 pub trait NumberFormatter {
-  scientific(value : Double, precision~ : Int = 6, exponent~ : Int = 3) -> String
+  scientific_localized(value : Double, precision~ : Int, exponent~ : Int) -> String
 }
 
 /// Convert a real number to scientific notation as a plain (locale-neutral)
@@ -428,13 +428,13 @@ fn int_to_words_positive(n : Int) -> String {
   if n == 0 {
     return ""
   }
-  let mut groups : Array[Int] = []
+  let groups : Array[Int] = []
   let mut rem = n
   while rem > 0 {
     groups.push(rem % 1000)
     rem = rem / 1000
   }
-  let mut parts : Array[String] = []
+  let parts : Array[String] = []
   let mut i = groups.length() - 1
   while i >= 0 {
     let g = groups[i]
@@ -490,26 +490,13 @@ fn pow10_int(n : Int) -> Int {
   r
 }
 
-fn group_thousands(s : String) -> String {
-  let chars = s.to_array()
-  let len = chars.length()
-  let mut out : Array[Char] = []
-  for i = 0; i < len; i = i + 1 {
-    if i != 0 && i % 3 == 0 {
-      out.push(',')
-    }
-    out.push(chars[len - 1 - i])
-  }
-  out.to_string()
-}
-
 fn pad_left(s : String, width : Int, ch : Char) -> String {
   let len = s.length()
   if len >= width {
     return s
   }
   let mut prefix = ""
-  for _ = 0; < width - len; _ = _ + 1 {
+  for i = 0; i < width - len; i = i + 1 {
     prefix = prefix + ch.to_string()
   }
   prefix + s
@@ -518,7 +505,7 @@ fn pad_left(s : String, width : Int, ch : Char) -> String {
 /// Map a power-of-ten exponent to its localized magnitude word id (used by the
 /// localized `scientific`). Falls back to the raw exponent string for powers
 /// not covered by the catalog.
-fn exponent_word_id(exponent : Int) -> MsgId {
+fn exponent_word_id(exponent : Int) -> MsgKey {
   match exponent {
     3 => EXPword1
     6 => EXPword2
@@ -535,7 +522,7 @@ fn exponent_word_id(exponent : Int) -> MsgId {
 /// Uses the `scientific_tmpl` message (`"%s x 10^%s"` for en, `"%s × 10^%s"`
 /// for ru_RU, `"%s×10^%s"` for zh/zh_CN) and substitutes the mantissa and a
 /// localized magnitude word for the exponent when available.
-pub fn scientific(
+pub fn scientific_localized(
   value : Double,
   precision~ : Int = 6,
   exponent~ : Int = 3,

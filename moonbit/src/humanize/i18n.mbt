@@ -11,7 +11,7 @@
 /// The variant name is the raw locale directory name under
 /// `src/humanize/locale/` (e.g. `zh_CN`, `pt_BR`, `fr_FR`). This mirrors
 /// python-humanize, where activation is performed by locale directory name.
-pub enum Locale {
+pub(all) enum Locale {
   Ar
   BnBD
   CaES
@@ -144,6 +144,8 @@ pub fn Locale::to_dir(self : Locale) -> String {
     ViVN => "vi_VN"
     ZhCN => "zh_CN"
     ZhHK => "zh_HK"
+    En => "en"
+    Zh => "zh"
   }
 }
 
@@ -250,7 +252,7 @@ pub fn decimal_separator() -> String {
 /// Not every locale ships every key (only `en`/`ru_RU`/`zh`/`zh_CN` currently
 /// carry the scientific-notation keys). `msg_str` falls back to the English
 /// catalog, then to the raw key string, so formatting is always total.
-pub enum MsgKey {
+pub(all) enum MsgKey {
   ERR
   SEC
   MIN
