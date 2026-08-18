@@ -74,7 +74,7 @@ python3 scripts/po2mbt        # 由 .po 重新生成 moonbit/src/humanize/i18n_d
 
 ```moonbit
 test "scientific_ru" {
-  let _ = activate("ru")
+  ignore(activate("ru_RU"))   // 注意：必须全名 "ru_RU"，"ru" 不会激活翻译
   @test.assert_eq(scientific("500"), "5.00 × 10²")
   @test.assert_eq(scientific("-1000"), "-1.00 × 10³")
   deactivate()
@@ -86,16 +86,20 @@ test "scientific_en_fallback" {
 }
 ```
 
-- 既有 `number_test.mbt:53-60` 断言（`"5.00 x 10²"` 等）在 `deactivate()`（英文）下**仍然成立**，无回归。
+> 重要修正（审查发现）：`Locale::from_string`（`i18n.mbt:56-99`）仅含 `"ru_RU" => Some(RuRU)`，无 `"ru"` 分支；传 `"ru"` 会落入 `_ => None`、翻译被关闭。故激活俄语必须写 `activate("ru_RU")`。`ru_RU.po:14` 的 `Language: ru` 头部字段仅作元数据，不参与查找。
+>
+> 测试风格：若新建 `i18n_localization_test.mbt`，断言应沿用 `i18n_test.mbt` 的裸 `assert_eq`/`assert_true` 风格（而非 `@test.assert_eq`）；`activate` 返回 `Option[Locale]`，用 `ignore(...)` 对齐既有 `i18n_test.mbt` 写法。上标由 `util.mbt` 的 `to_superscript` 生成（`'2'→'²'`、`'3'→'³'`），字符串形态正确。
+
+- 既有 `number_test.mbt:53-61` 断言（`"5.00 x 10²"` 等）在 `deactivate()`（英文）下**仍然成立**，无回归。
 
 ## 4. 验收标准
 
 | # | 场景 | 期望 |
 |---|------|------|
 | 1 | `deactivate()` 后 `scientific("500")` | `"5.00 x 10²"`（与现状一致，无回归） |
-| 2 | `activate("ru")` 后 `scientific("500")` | `"5.00 × 10²"` |
-| 3 | `activate("ru")` 后 `scientific("-1000")` | `"-1.00 × 10³"` |
-| 4 | `fractional("0.3")`（`activate("ru")` 或默认） | `"3/10"`（数字形式不变，与 python 一致） |
+| 2 | `activate("ru_RU")` 后 `scientific("500")` | `"5.00 × 10²"` |
+| 3 | `activate("ru_RU")` 后 `scientific("-1000")` | `"-1.00 × 10³"` |
+| 4 | `fractional("0.3")`（`activate("ru_RU")` 或默认） | `"3/10"`（数字形式不变，与 python 一致） |
 | 5 | `scripts/po2mbt --check` | 退出码 0（`.po` 与 `i18n_data.mbt` 同步） |
 | 6 | `moon build` / `--target wasm-gc` / `--target native` | 三目标编译通过 |
 | 7 | CI `moonbit-i18n-sync` 与 `moonbit-build` job | 均绿 |
@@ -104,7 +108,7 @@ test "scientific_en_fallback" {
 1. [ ] 改 `number.mbt` `scientific`：拆分 `gettext(" x 10")`。
 2. [ ] `ru_RU.po` 追加 `msgid " x 10"` / `msgstr " × 10"`。
 3. [ ] 运行 `python3 scripts/po2mbt` 重新生成 `i18n_data.mbt`，审查 diff 确认新条目。
-4. [ ] 新增 ru 本地化测试 + 确认既有测试无回归。
+4. [ ] 新增 ru 本地化测试（`activate("ru_RU")`，断言 `"5.00 × 10²"` 等）+ 确认既有测试无回归。
 5. [ ] `moon build`（默认/native/wasm-gc）通过；`scripts/po2mbt --check` 通过。
 6. [ ] 提交 `.po` 与 `i18n_data.mbt`（连同代码与测试）。
 
@@ -113,3 +117,4 @@ test "scientific_en_fallback" {
 - **`fractional` 不动**：避免偏离 python 行为、避免破坏 `number_test.mbt:46-49`。
 - **乘号选择**：ru 示例用 `" × 10"`（U+00D7）。若俄语维护者偏好 `" x 10"` 或 `"·10"`, 仅需改 `ru_RU.po` 一处并重新生成，无需动代码。
 - **可扩展性**：后续任何语言只需在其 `.po` 加一条 `msgid " x 10"`，即可获得本地化连接符。
+- **上标来源**：指数上标由 `moonbit/src/humanize/util.mbt` 的 `to_superscript` 生成（`'2'→'²'`、`'3'→'³'`），非 `rational.mbt`；本 spec 不改动该函数。
