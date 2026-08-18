@@ -86,8 +86,29 @@ jobs:
         run: |
           python3 scripts/po2mbt --check
 
+  moonbit-build:
+    runs-on: ubuntu-latest
+    name: MoonBit build (wasm-gc + native)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install MoonBit toolchain
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build wasm-gc target
+        run: cd moonbit && moon build --target wasm-gc
+
+      - name: Build native target
+        # Guards gap-spec #1.4: the native target must link (clock_native.mbt
+        # provides `now()`), so a missing native clock would fail this step.
+        run: cd moonbit && moon build --target native
+
   success:
-    needs: [test, moonbit-i18n-sync]
+    needs: [test, moonbit-i18n-sync, moonbit-build]
     runs-on: ubuntu-latest
     name: Test successful
     steps:

@@ -379,7 +379,10 @@ pub fn ordinal(value : String) -> String {
   }
   let suffixes = ["th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"]
   let suffix = suffixes[digit]
-  // User-visible ordinal passes through gettext so locale catalogs can
-  // translate the suffix form; English / unknown locales fall back.
-  gettext(n.to_string() + suffix)
+  // Localize the ordinal suffix via pgettext using the digit context, exactly
+  // like python-humanize ("{digit} (male)" ctx + English suffix word). This lets
+  // catalogs such as ru_RU map e.g. digit 2 / "nd" -> "ой". English / unknown
+  // locales fall back to the English suffix; the number is always ASCII digits.
+  let localized = pgettext(digit.to_string() + " (male)", suffix)
+  n.to_string() + localized
 }
