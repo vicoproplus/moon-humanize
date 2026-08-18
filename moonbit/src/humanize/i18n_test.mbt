@@ -109,3 +109,24 @@ test "i18n msg_str_fallback" {
   assert_eq(msg_str(FrFR, SCItmpl).to_string(), msg_str(En, SCItmpl).to_string())
   deactivate()
 }
+
+test "i18n get_translation mirrors current_locale" {
+  // get_translation() must mirror current_locale(): None when no translation
+  // is active, and Some(active locale) once activate() has been called.
+  // NOTE: Locale does not derive Eq, so we assert on the option shape and
+  // compare via Locale::to_dir rather than comparing Locale values directly.
+  deactivate()
+  assert_eq(get_translation() is None, true)
+  assert_eq(current_locale() is None, true)
+  ignore(activate("fr_FR"))
+  assert_eq(get_translation() is Some(_), true)
+  assert_eq(current_locale() is Some(_), true)
+  // get_translation() must return the same handle as current_locale().
+  match (get_translation(), current_locale()) {
+    (Some(a), Some(b)) =>
+      assert_eq(Locale::to_dir(a), Locale::to_dir(b))
+    _ => ()
+  }
+  deactivate()
+  assert_eq(get_translation() is None, true)
+}

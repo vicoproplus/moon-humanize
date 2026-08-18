@@ -185,6 +185,14 @@ pub fn current_locale() -> Option[Locale] {
   locale_state.active
 }
 
+/// Return the current translation handle (the active `Locale`), or `None`
+/// for no translation (English). Mirrors python-humanize's
+/// `humanize.i18n.get_translation()` which returns the active locale's
+/// `NullTranslations` object (or a fresh `NullTranslations()` when none is set).
+pub fn get_translation() -> Option[Locale] {
+  current_locale()
+}
+
 // ---------------------------------------------------------------------------
 // Translation helpers
 // ---------------------------------------------------------------------------

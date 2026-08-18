@@ -126,3 +126,26 @@ test "precisedelta" {
     "1,899 years, 7 months, 13 days, 10 hours, 10 minutes and 10 seconds",
   )
 }
+
+// Python-parity golden tests (python-humanize 4.16.0 via scripts/gen_golden.py).
+// Expected strings are the installed authority's real output; run `moon test`
+// once the toolchain is available. precisedelta uses format="%d" here to match
+// python-humanize's default integer formatting (moon-humanize's default is "%0.2f").
+test "time python parity" {
+  @test.assert_eq(naturaltime(TimeInput::from_seconds(1.0)), "a second ago")
+  @test.assert_eq(naturaltime(TimeInput::from_seconds(2.0)), "2 seconds ago")
+  @test.assert_eq(naturaldelta(TimeInput::from_seconds(5.0)), "5 seconds")
+  @test.assert_eq(naturaldelta(TimeInput::from_seconds(90.0)), "2 minutes")
+  @test.assert_eq(
+    naturaldelta(TimeInput::from_delta(timedelta(days=1, seconds=7200))),
+    "a day",
+  )
+  @test.assert_eq(
+    precisedelta(TimeInput::from_delta(timedelta(days=1, seconds=7200)), format="%d"),
+    "1 day and 2 hours",
+  )
+  @test.assert_eq(
+    precisedelta(TimeInput::from_delta(timedelta(seconds=1, microseconds=400000)), format="%d"),
+    "1 second",
+  )
+}

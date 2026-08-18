@@ -31,12 +31,16 @@ fn _fs_get_symbols(symbols : String?) -> Array[String] {
 ///
 /// * `value` is the number of bytes (a Double or Int).
 /// * `binary` selects binary (1024-based) units when `true` and `symbols` is None.
+/// * `gnu` selects GNU units (1024-based, no decimal point, space-free, e.g.
+///   `"300B"`, `"2.9K"`) — mirrors python-humanize's `gnu=True`.
 /// * `suffix` is appended after the unit symbol (default `"B"`).
-/// * `format` is a Python-style format string (default `"%.1f"`).
+/// * `format` is a Python-style format string (default `"%.1f"`); passing `"%.0f"`
+///   mirrors python-humanize's `format=True` (no fractional digits).
 /// * `symbols` selects the unit set: `None`, `"decimal"`, `"binary"`, or `"gnu"`.
 pub fn naturalsize(
   value : Double,
   binary~ : Bool = false,
+  gnu~ : Bool = false,
   suffix~ : String = "B",
   format~ : String = "%.1f",
   symbols~ : String? = None
@@ -50,7 +54,7 @@ pub fn naturalsize(
   } else {
     _fs_get_symbols(symbols)
   }
-  let is_gnu = symbols is Some("gnu")
+  let is_gnu = gnu || symbols is Some("gnu")
 
   let mut negative = false
   let mut num = value

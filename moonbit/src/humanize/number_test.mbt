@@ -76,6 +76,36 @@ test "ordinal" {
   @test.assert_eq(ordinal("foo"), "foo")
 }
 
+// Python-parity golden tests (python-humanize 4.16.0 via scripts/gen_golden.py).
+// Values below were emitted by the installed authority; run `moon test` once the
+// toolchain is available to confirm byte-for-byte parity.
+test "number python parity" {
+  // intword edges
+  @test.assert_eq(intword("999"), "999")
+  @test.assert_eq(intword("1000000"), "1.0 million")
+  @test.assert_eq(intword("999999"), "1.0 million")
+  @test.assert_eq(intword("1000000000000000000000000000000000"), "1.0 nonillion")
+  // intcomma
+  @test.assert_eq(intcomma("1234567.89"), "1,234,567.89")
+  @test.assert_eq(intcomma("-1000000"), "-1,000,000")
+  // ordinal
+  @test.assert_eq(ordinal("0"), "0th")
+  @test.assert_eq(ordinal("121"), "121st")
+  @test.assert_eq(ordinal("103"), "103rd")
+  // metric
+  @test.assert_eq(metric(0.0), "0.00")
+  @test.assert_eq(metric(25000.0), "25.0 k")
+  @test.assert_eq(metric(100000000000000.0), "100 T")
+  // apnumber
+  @test.assert_eq(apnumber("1"), "one")
+  @test.assert_eq(apnumber("9"), "nine")
+  @test.assert_eq(apnumber("100"), "100")
+  // fractional
+  @test.assert_eq(fractional("0.5"), "1/2")
+  @test.assert_eq(fractional("1.5"), "1 1/2")
+  @test.assert_eq(fractional("3.14"), "3 7/50")
+}
+
 test "to_scientific" {
   @test.assert_eq(to_scientific(3141.59, precision=2, exponent=3), "3.14 x 10^3")
   @test.assert_eq(to_scientific(500.0, precision=2, exponent=2), "5.00 x 10^2")

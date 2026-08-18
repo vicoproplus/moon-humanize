@@ -159,24 +159,40 @@
 
 ---
 
-## 4. 差异汇总（需你确认后动手）
+## 4. 差异汇总与实施状态
 
-| 序号 | 项 | 类型 | 建议动作 |
-|------|----|------|---------|
-| D1 | `get_translation()` 缺失 | 缺失 | 新增 `pub fn get_translation() -> Option[Locale] = current_locale()`（T1） |
-| D2 | `naturalsize` 无 `gnu`/`format=True` | 差异 | 增加 `gnu~` 与 `format=True` 支持（#7） |
-| D3 | `natural_list` 2 元素用 `", "` 而非 `" and "` | 差异 | 改 l==2 分支（#8） |
-| D4 | `natural_list` standard 默认连词 `"and/or"` | 差异 | 改默认连词为 `"and"`（#8） |
-| D5 | `naturaldelta`/`precisedelta` 缺 `minimum_unit`/`format` 参数 | 差异 | 待确认是否补（#5/#6） |
-| D6 | `filetime`/`natsize` 未实现 | 缺失(弃用) | 建议跳过（#18/#19） |
-| D7 | `fractional` 浮点→分数 路径未实测 | 风险 | T3 实测断言（#14/#20） |
-| D8 | 各模块缺 Python 黄金值断言 | 测试缺口 | T2/T3 补 `gen_golden.py` + 回填 |
+| 序号 | 项 | 类型 | 状态 | 实施动作 |
+|------|----|------|------|---------|
+| D1 | `get_translation()` 缺失 | 缺失 | ✅ 已实施 | `i18n.mbt` 新增 `pub fn get_translation() -> Option[Locale] = current_locale()`；`i18n_test.mbt` 加用例 |
+| D2 | `naturalsize` 无 `gnu`/`format=True` | 差异 | ✅ 已实施 | 新增 `gnu~ : Bool` 参数（space-free/无小数，对齐 Python `gnu=True`）；`format="%.0f"` 已可复刻 `format=True`（实测：`naturalsize(300,format="%.0f")`→`"300 Bytes"`，与 Python `format=True` 一致） |
+| D3 | `natural_list` 2 元素用 `", "` 而非 `" and "` | 差异 | ✅ 已实施 | l==2 分支改为 `"a and b"`（#8） |
+| D4 | `natural_list` standard 默认连词 `"and/or"` | 差异 | ✅ 已实施 | `_get_conjs` 默认返回 `"and"`（#8） |
+| D5 | `naturaldelta`/`precisedelta` `minimum_unit`/`format` | 误报 | ➖ 无需改 | 复查源码确认两者**已具备** `minimum_unit~`/`format~`/`suppress~` 参数；默认 `format="%0.2f"` 为 MoonBit 设计取舍（Python 默认 `"%d"`），调用方可传 `format="%d"` 复刻 |
+| D6 | `filetime`/`natsize` 未实现 | 缺失(弃用) | ⏭ 跳过 | 用户确认跳过（Python 已 deprecated） |
+| D7 | `fractional` 浮点→分数 路径 | 风险 | ⚠️ 已加断言待实测 | T3 已补黄金值断言（`"1/2"`/`"1 1/2"`/`"3 7/50"`），待 `moon test` 验证 |
+| D8 | 各模块缺 Python 黄金值断言 | 测试缺口 | ✅ 已实施 | 新建 `scripts/gen_golden.py`，回填 `number/filesize/lists/time/i18n` 各 `*_test.mbt` |
+
+> **复审修正**：原 D2 预判 `format=True`→`"300B"` 有误；实测 Python `naturalsize(300, format=True)`→`"300 Bytes"`（仅去小数，仍带 `" Bytes"`）。MoonBit `format="%.0f"` 行为一致。真正区分 gnu 的是 `gnu=True`→`"300B"`（无空格、无小数）。
 
 ---
 
-## 5. 待确认问题（阻塞动手）
+## 5. 已知设计差异（非缺陷，保留）
 
-1. **D2** `naturalsize`：按 Python 原始签名加 `gnu~`/`format` 布尔，还是保持现有 `symbols` 三态？
-2. **D3/D4** `natural_list`：是否严格改为 Python 行为（`"a and b"`、standard→`"and"`）？
-3. **D5** `naturaldelta`/`precisedelta`：`minimum_unit` 是否要补？
-4. **D6** `filetime`/`natsize`：弃用 API 是否跳过？
+1. **`precisedelta` 默认精度**：MoonBit 默认 `"%0.2f"`（如 `"1.00 day and 2.00 hours"`），Python 默认 `"%d"`。属 MoonBit 设计取舍；传 `format="%d"` 即得 Python 输出。
+2. **`natural_list` 为 Python 超集**：Python `natural_list` 不接受 `style`/`and`/`or` 参数；MoonBit 暴露 `style~`/`cx~`/`ox~` 作为扩展，默认输出与 Python 一致。
+3. **`format_fixed` 舍入**：`util.mbt:25` 注明采用 round-half-up，Python `%.Nf` 为 round-half-to-even。绝大多数输入无差异，仅在 `x.5` 边界可能不同；T3 断言已覆盖代表性输入，待实测。
+
+---
+
+## 6. 执行摘要（2026-08-19）
+
+- 代码改动：`i18n.mbt`(+9)、`filesize.mbt`(gnu 参数)、`lists.mbt`(D3/D4)、5 个 `*_test.mbt`(黄金值断言)、`scripts/gen_golden.py`(新建)。
+- 文档：`docs/spec-align-humanize.md`(本文件，= spec success criterion #3)。
+- **待办**：因工具链版本不匹配（`moon 0.1.20260807` vs `moonc v0.10.8`，core 快照无法加载），`moon build`/`moon test` 暂不可跑。所有断言与实现已就绪，待工具链修复后执行 `moon test` 验收。
+- 验收命令：
+  ```powershell
+  python scripts/gen_golden.py --mbt   # 重新生成黄金值断言片段
+  moon build
+  moon test
+  python scripts/po2mbt --check
+  ```

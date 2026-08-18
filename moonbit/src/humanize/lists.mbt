@@ -5,7 +5,7 @@
 /// Humanize a collection of items into a natural-language enumeration.
 ///
 /// * `value` is the list of items (each rendered with `to_string`).
-/// * `style` selects the connector: `"standard"` (and/or), `"or"`, or `"and"`.
+/// * `style` selects the connector: `"standard"` (and), `"or"`, or `"and"`.
 /// * `cx` (default `", "`) separates items; `ox` (default `" "`) separates the
 ///   final item from the connector.
 pub fn natural_list(
@@ -25,7 +25,8 @@ pub fn natural_list(
     return value[0]
   }
   if l == 2 {
-    return value[0] + ", " + value[1]
+    // python-humanize: a two-item standard list reads "a and b" (no comma).
+    return value[0] + " " + conjs + " " + value[1]
   }
   let mut s = ""
   let mut i = 0
@@ -46,6 +47,7 @@ fn _get_conjs(style : String) -> String {
   } else if style == "and" {
     "and"
   } else {
-    "and/or"
+    // python-humanize's "standard" style connects with "and".
+    "and"
   }
 }
