@@ -119,6 +119,8 @@
 
 - **F2（业务包平台分文件）**：M2 先实测 `humanize` 包是否支持 `options(targets:...)`；不支持则改用单文件 `extern "js"` + 构建矩阵。
 - **WASM 运行时（0xc0000139）**：当前 `moon test --target wasm` 报缺失 DLL；M5 若仍失败，定位为环境/工具链问题，用 native 目标验证逻辑并单独记录。
+
+> **误判更正（2026-08-18）**：早期曾误判为「`C:\Windows\System32` 缺失 UCRT 转发 DLL（`api-ms-win-crt-*.dll`），需 `scripts/fix-ucrt.ps1` 复制到 `System32`」。经 `dumpbin /imports` 与 `GetProcAddress` 实测，根因实为：`moonrun.exe` 直接导入了 `kernel32.dll` 的 **`GetTempPath2W`**（Windows 10 21H1 / Build 19043 才引入），而当前系统真实内核为 **Windows 10 2004 / 19041**（`BuildLabEx=19041.1...`，`kernel32.dll` 文件版本 `10.0.19041.3155`），该导出不存在 → 加载器 `STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139)`。`fix-ucrt` 脚本与 README 对应章节均已删除。VC++ Redist / UCRT 转发 DLL 均正常，无需复制。修复方向见根因结论（升级系统内核到 19043+ 或换更高版本 Windows 跑测试），详见 `docs/TOOLCHAIN-WINDOWS-ISSUE.md`。
 - `.po` 转义/复数公式编译正确性：靠 `po2mbt.py` 单测 + Python 侧 golden 兜底。
 - 36 语言内嵌体积：约数十 KB，WASM 可接受。
 
@@ -156,6 +158,8 @@
 
 - `moon test --target native`：**19/19 通过**（含 `time_test` 5、`filesize_test` 3 等修复用例）。
 - `moon test --target wasm`：因环境缺失 DLL（`0xc0000139`）无法运行，属工具链/环境问题，逻辑已用 native 目标验证。
+
+> **误判更正**：上述「缺失 DLL」早期误判为 UCRT 转发 DLL 缺失（`fix-ucrt` 脚本已删）。实测根因为系统内核为 Win10 19041，缺 `GetTempPath2W`（19043+ 才有），`moonrun.exe` 加载即崩。详见 §4 风险章节的误判更正。
 - Lint：`filesize.mbt` 一处 `StringView.to_string()` 弃用告警已改为 `.to_owned()`，其余无新增告警。
 
 > 注：`moonbit/` 根目录下遗留的 `*.txt`/`gen_oracle*.py` 等调试产物需手动清理（执行环境审批超时未能删除）。

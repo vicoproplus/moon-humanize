@@ -229,9 +229,10 @@ pub fn intword(value : String, format~ : String = "%.1f") -> String {
       let mut number = format_float_with(format, chopped)
       // python 4.16.0: rounding can land the mantissa exactly on the next
       // power (999999 -> "1000.0 thousand"); bump up to "1.0 million".
-      let rounded_v = @string.parse_double(number)
+      // `rounded` is the mantissa rounded to an integer (1.0e3 -> 1000).
+      let rounded = @math.round(chopped)
       if ordinal < intword_powers.length() - 1 &&
-        rounded_v * power == intword_powers[ordinal + 1] {
+        rounded * power == intword_powers[ordinal + 1] {
         ordinal = ordinal + 1
         number = format_float_with(format, 1.0)
       }
