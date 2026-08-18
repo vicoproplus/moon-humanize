@@ -399,3 +399,32 @@ moon test
 
 详细的移植计划与阶段进度见 `docs/specs/port-to-moonbit.md` 及各模块设计文档
 （`docs/number.md`、`docs/time.md`、`docs/filesize.md`、`docs/i18n.md`、`docs/lists.md`）。
+
+## Windows 环境：自动修复缺失的 UCRT DLL
+
+在部分 Windows 镜像上，`C:\Windows\System32` 缺失 UCRT 转发 DLL（`api-ms-win-crt-*.dll`），
+导致 `moonrun.exe` 在启动期直接崩溃，退出码 `0xC0000139`（`STATUS_ENTRYPOINT_NOT_FOUND`），
+且没有任何报错输出。这些转发 DLL 只存在于 `System32\downlevel`，必须复制回 `System32` 才能被加载器正确解析。
+
+仓库提供 `scripts/fix-ucrt.ps1` 自动检测并修复（支持自动提权）：
+
+```powershell
+# 推荐：直接运行，缺权限时会自动弹出 UAC 提权重启
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fix-ucrt.ps1
+
+# 也可通过跨平台包装脚本调用（非 Windows 会直接提示无需修复）
+./scripts/fix-ucrt
+```
+
+可选参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `-Target <path>` | 指定要修复的二进制（默认自动定位 `moonrun.exe`） |
+| `-Force` | 即便已存在也重新复制 |
+| `-WhatIf` | 仅报告将要执行的操作，不改动系统 |
+| `-NoElevate` | 禁用自动 UAC 提权（仅用于测试） |
+
+修复逻辑：检测 18 个关键 CRT DLL（以 `System32` 是否存在为准）→ 未提权时自动 `RunAs` 提权重启 →
+提权后从 `downlevel` / `SysWOW64` 复制缺失 DLL 到 `System32` 并逐文件校验。若系统任何位置都找不到某 DLL，
+脚本会提示安装 [VC++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)。
