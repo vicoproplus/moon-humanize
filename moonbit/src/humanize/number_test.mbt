@@ -77,30 +77,43 @@ test "ordinal" {
 }
 
 // Python-parity golden tests (python-humanize 4.16.0 via scripts/gen_golden.py).
-// Values below were emitted by the installed authority; run `moon test` once the
+// Re-generate with `python scripts/gen_golden.py --mbt`; run `moon test` once the
 // toolchain is available to confirm byte-for-byte parity.
 test "number python parity" {
-  // intword edges
+  // intword
+  @test.assert_eq(intword("100"), "100")
   @test.assert_eq(intword("999"), "999")
-  @test.assert_eq(intword("1000000"), "1.0 million")
+  @test.assert_eq(intword("1000"), "1.0 thousand")
+  @test.assert_eq(intword("1234567"), "1.2 million")
   @test.assert_eq(intword("999999"), "1.0 million")
-  @test.assert_eq(intword("1000000000000000000000000000000000"), "1.0 nonillion")
+  @test.assert_eq(intword("1000000000000000000000000000000"), "1.0 nonillion")
+  @test.assert_eq(intword("8100000000000000000000000000000000"), "8.1 decillion")
   // intcomma
   @test.assert_eq(intcomma("1234567.89"), "1,234,567.89")
+  @test.assert_eq(intcomma("100"), "100")
   @test.assert_eq(intcomma("-1000000"), "-1,000,000")
   // ordinal
   @test.assert_eq(ordinal("0"), "0th")
-  @test.assert_eq(ordinal("121"), "121st")
+  @test.assert_eq(ordinal("1"), "1st")
+  @test.assert_eq(ordinal("2"), "2nd")
+  @test.assert_eq(ordinal("11"), "11th")
+  @test.assert_eq(ordinal("12"), "12th")
+  @test.assert_eq(ordinal("13"), "13th")
+  @test.assert_eq(ordinal("112"), "112th")
   @test.assert_eq(ordinal("103"), "103rd")
+  @test.assert_eq(ordinal("121"), "121st")
   // metric
   @test.assert_eq(metric(0.0), "0.00")
   @test.assert_eq(metric(25000.0), "25.0 k")
   @test.assert_eq(metric(100000000000000.0), "100 T")
+  @test.assert_eq(metric(999.0), "999")
   // apnumber
   @test.assert_eq(apnumber("1"), "one")
   @test.assert_eq(apnumber("9"), "nine")
+  @test.assert_eq(apnumber("10"), "10")
   @test.assert_eq(apnumber("100"), "100")
   // fractional
+  @test.assert_eq(fractional("0.3"), "3/10")
   @test.assert_eq(fractional("0.5"), "1/2")
   @test.assert_eq(fractional("1.5"), "1 1/2")
   @test.assert_eq(fractional("3.14"), "3 7/50")

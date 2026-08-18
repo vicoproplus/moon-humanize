@@ -31,8 +31,9 @@ fn _fs_get_symbols(symbols : String?) -> Array[String] {
 ///
 /// * `value` is the number of bytes (a Double or Int).
 /// * `binary` selects binary (1024-based) units when `true` and `symbols` is None.
-/// * `gnu` selects GNU units (1024-based, no decimal point, space-free, e.g.
-///   `"300B"`, `"2.9K"`) — mirrors python-humanize's `gnu=True`.
+/// * `gnu` selects GNU units (1024-based, space-free, e.g. `"300B"`, `"2.9K"`) —
+///   mirrors python-humanize's `gnu=True` exactly, including the quirk that the
+///   suffix is only shown below one unit (`ls -sh` style).
 /// * `suffix` is appended after the unit symbol (default `"B"`).
 /// * `format` is a Python-style format string (default `"%.1f"`); passing `"%.0f"`
 ///   mirrors python-humanize's `format=True` (no fractional digits).
@@ -45,7 +46,10 @@ pub fn naturalsize(
   format~ : String = "%.1f",
   symbols~ : String? = None
 ) -> String {
-  let symbols_arr = if binary {
+  let is_gnu = gnu || symbols is Some("gnu")
+  let symbols_arr = if is_gnu {
+    gnu_symbols
+  } else if binary {
     if symbols is Some(_) {
       _fs_get_symbols(symbols)
     } else {
@@ -54,7 +58,8 @@ pub fn naturalsize(
   } else {
     _fs_get_symbols(symbols)
   }
-  let is_gnu = gnu || symbols is Some("gnu")
+  // python: base = 1024 if (gnu or binary) else 1000.
+  let base = if is_gnu || binary { 1024.0 } else { 1000.0 }
 
   let mut negative = false
   let mut num = value
@@ -63,52 +68,48 @@ pub fn naturalsize(
     num = -num
   }
 
+  // Largest exponent with `num / base^exponent >= base`, capped at the top
+  // symbol — mirrors python's `int(min(log(abs, base), len(suffix)))`.
   let mut exponent = 0
   let mut divisor = 1.0
-
-  if is_gnu {
-    // GNU format uses 1024-based units, one step per power of 1024.
-    let mut n = num
-    while n >= 1024.0 && exponent < symbols_arr.length() - 1 {
-      n = n / 1024.0
-      divisor = divisor * 1024.0
-      exponent = exponent + 1
-    }
-  } else {
-    let threshold = if binary { 1024.0 } else { 1000.0 }
-    let mut n = num
-    while n >= threshold && exponent < symbols_arr.length() - 1 {
-      n = n / threshold
-      divisor = divisor * threshold
-      exponent = exponent + 1
-    }
+  let mut n = num
+  while n >= base && exponent < symbols_arr.length() - 1 {
+    n = n / base
+    divisor = divisor * base
+    exponent = exponent + 1
   }
 
-  let val = num / divisor
-
-  let mut result = _fs_format(val, format)
+  let sign = if negative { "-" } else { "" }
   if exponent == 0 {
-    // Sub-threshold: render "Byte"/"Bytes" (python-humanize strips a trailing
-    // ".0" from the default 1-decimal format). The suffix is not appended.
-    if result.has_suffix(".0") {
-      result = (result[: result.length() - 2]).to_owned()
-    }
-    if num == 1.0 {
-      result = result + " Byte"
+    // Sub-threshold (incl. exactly one byte): python renders an integer and
+    // ignores `format` — `"%d Byte"/"%d Bytes"`, or `f"{int}B"` for gnu.
+    let count = num.to_int().to_string()
+    if is_gnu {
+      sign + count + suffix
+    } else if num == 1.0 {
+      sign + count + " Byte"
     } else {
-      result = result + " Bytes"
+      sign + count + " Bytes"
     }
-  } else if is_gnu {
-    // GNU does not add a decimal point before the symbol
-    result = result.replace(old= ".0", new= "")
-    result = result + symbols_arr[exponent] + suffix
   } else {
-    result = result + " " + symbols_arr[exponent] + suffix
-  }
-  if negative {
-    "-" + result
-  } else {
-    result
+    let mut val = num / divisor
+    // python 4.16.0: rounding can push the mantissa up to `base` (999999 is
+    // 999.999 kB, which formats to "1000.0 kB"); step up one unit so it
+    // reads "1.0 MB". (`exponent == 0` already returned above.)
+    if exponent < symbols_arr.length() - 1 {
+      if _fs_str_to_double(_fs_format(val, format)) >= base {
+        exponent = exponent + 1
+        divisor = divisor * base
+        val = num / divisor
+      }
+    }
+    let mantissa = _fs_format(val, format)
+    if is_gnu {
+      // python: no space and no `suffix` above the threshold ("2.9K").
+      sign + mantissa + symbols_arr[exponent]
+    } else {
+      sign + mantissa + " " + symbols_arr[exponent] + suffix
+    }
   }
 }
 
@@ -150,6 +151,39 @@ fn _fs_str_to_int(s : String) -> Int {
     i = i + 1
   }
   r
+}
+
+// Parse a fixed-point string like "1000.0" / "-2.9" back into a Double, used to
+// mirror python's rounding push-up check (abs(float(format % ...)) >= base).
+fn _fs_str_to_double(s : String) -> Double {
+  let a = s.to_array()
+  let mut i = 0
+  let mut sign = 1.0
+  if a.length() > 0 && a[0] == '-' {
+    sign = -1.0
+    i = 1
+  }
+  let mut int_part = 0.0
+  while i < a.length() && a[i] != '.' {
+    if a[i] >= '0' && a[i] <= '9' {
+      int_part = int_part * 10.0 + (a[i].to_int() - '0'.to_int()).to_double()
+    }
+    i = i + 1
+  }
+  if i >= a.length() {
+    return sign * int_part
+  }
+  i = i + 1 // skip '.'
+  let mut frac = 0.0
+  let mut place = 0.1
+  while i < a.length() {
+    if a[i] >= '0' && a[i] <= '9' {
+      frac = frac + (a[i].to_int() - '0'.to_int()).to_double() * place
+      place = place * 0.1
+    }
+    i = i + 1
+  }
+  sign * (int_part + frac)
 }
 
 fn _fs_str_contains(s : String, sub : String) -> Bool {

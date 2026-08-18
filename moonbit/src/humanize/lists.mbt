@@ -14,8 +14,8 @@ pub fn natural_list(
   cx~ : String = ", ",
   ox~ : String = " "
 ) -> String {
-  // `cx` is accepted for API parity; python-humanize always joins with ", ".
-  let _ = cx
+  // `cx` is the item separator; python-humanize's natural_list hardcodes ", ",
+  // which is exactly the default here, so default output matches byte-for-byte.
   let conjs = _get_conjs(style)
   let l = value.length()
   if l == 0 {
@@ -32,7 +32,7 @@ pub fn natural_list(
   let mut i = 0
   while i < l - 1 {
     if i > 0 {
-      s = s + ", "
+      s = s + cx
     }
     s = s + value[i]
     i = i + 1
