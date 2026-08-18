@@ -249,6 +249,24 @@ msginit -i humanize.pot -o humanize/locale/<locale name>/LC_MESSAGES/humanize.po
 # 从 python-humanize 迁移到 MoonBit 库（moon-humanize）
 
 本项目 `moon-humanize` 是 [python-humanize](https://github.com/python-humanize/humanize) 的 **MoonBit** 移植版本。
+
+> MoonBit 包已发布到 [mooncakes.io](https://mooncakes.io)：[`yjdszjoe/moon-humanize`](https://mooncakes.io/#/package/yjdszjoe/moon-humanize)。
+>
+> 在 MoonBit 项目中添加依赖：
+>
+> ```bash
+> moon add yjdszjoe/moon-humanize
+> ```
+>
+> 引用方式：
+>
+> ```moonbit
+> // 通过根包导入便捷函数
+> import "yjdszjoe/moon-humanize"
+>
+> // 或直接引用内部 humanize 模块
+> import "yjdszjoe/moon-humanize/src/humanize"
+> ```
 原项目是一个 Python 库，提供数字、时间、文件大小等的人文化转换工具；本库用 MoonBit 重新实现了其核心语义，
 便于在 MoonBit / WASM 环境中复用相同的人文化能力。
 
