@@ -362,6 +362,199 @@ pub fn scientific(value : String, precision~ : Int = 2) -> String {
   gettext(sign + mant_str + " x 10" + exp_str)
 }
 
+// ---------------------------------------------------------------------------
+// Feature 1: locale-aware scientific notation + decimal/word helpers
+// ---------------------------------------------------------------------------
+
+/// Trait for locale-aware number formatting. Concrete number types can
+/// implement `scientific` to produce a localized scientific-notation string.
+/// The free `scientific(value : Double, ~precision, ~exponent, ~locale)`
+/// function below is the default, generic implementation.
+pub trait NumberFormatter {
+  scientific(value : Double, precision~ : Int = 6, exponent~ : Int = 3) -> String
+}
+
+/// Convert a real number to scientific notation as a plain (locale-neutral)
+/// string, e.g. `to_scientific(3.14159, 2, 3) == "3.14 x 10^3"`.
+///
+/// This is the building block used by the localized `scientific` overload.
+pub fn to_scientific(value : Double, precision~ : Int = 6, exponent~ : Int = 3) -> String {
+  let mantissa = value / pow10_double(exponent)
+  let m = format_fixed(mantissa, precision)
+  m + " x 10^" + exponent.to_string()
+}
+
+/// Format a number with grouped thousands and a fixed number of `decimals`,
+/// e.g. `to_decimal(1234567.891, decimals=2) == "1,234,567.89"`.
+pub fn to_decimal(value : Double, decimals~ : Int = 2) -> String {
+  let neg = value < 0.0
+  let v = if neg { -value } else { value }
+  let factor = pow10_double(decimals)
+  let x = v * factor
+  let scaled = if x >= 0.0 {
+    (x + 0.5).floor().to_int()
+  } else {
+    (x - 0.5).ceil().to_int()
+  }
+  let denom = pow10_int(decimals)
+  let int_part = scaled / denom
+  let frac_part = scaled % denom
+  let int_str = group_thousands(int_part.to_string())
+  let frac_str = pad_left(frac_part.to_string(), decimals, '0')
+  let body = int_str + "." + frac_str
+  if neg { "-" + body } else { body }
+}
+
+/// Spell out an integer in English cardinal words, e.g. `123` -> `"one hundred and twenty-three"`.
+///
+/// Negative numbers are prefixed with `"negative"`. Locale-specific spelling
+/// (e.g. Chinese 读数) is out of scope for the initial implementation; this
+/// returns English regardless of the active locale.
+pub fn integer_to_words(n : Int) -> String {
+  if n == 0 {
+    return "zero"
+  }
+  let neg = n < 0
+  let x = if neg { -n } else { n }
+  let words = int_to_words_positive(x)
+  if neg { "negative " + words } else { words }
+}
+
+fn int_to_words_positive(n : Int) -> String {
+  let scales = [
+    "", " thousand", " million", " billion", " trillion", " quadrillion",
+    " quintillion",
+  ]
+  if n == 0 {
+    return ""
+  }
+  let mut groups : Array[Int] = []
+  let mut rem = n
+  while rem > 0 {
+    groups.push(rem % 1000)
+    rem = rem / 1000
+  }
+  let mut parts : Array[String] = []
+  let mut i = groups.length() - 1
+  while i >= 0 {
+    let g = groups[i]
+    if g != 0 {
+      let w = under1000_words(g)
+      let scale = scales[i]
+      parts.push(if scale == "" { w } else { w + scale })
+    }
+    i = i - 1
+  }
+  parts.join(" ")
+}
+
+fn under1000_words(n : Int) -> String {
+  let ones = [
+    "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "seventeen", "eighteen", "nineteen",
+  ]
+  let tens = [
+    "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
+    "ninety",
+  ]
+  let h = n / 100
+  let t = n % 100
+  let mut s = ""
+  if h > 0 {
+    s = s + ones[h] + " hundred"
+  }
+  if t > 0 {
+    if h > 0 {
+      s = s + " and "
+    }
+    if t < 20 {
+      s = s + ones[t]
+    } else {
+      let d = t / 10
+      let u = t % 10
+      s = s + tens[d]
+      if u > 0 {
+        s = s + "-" + ones[u]
+      }
+    }
+  }
+  s
+}
+
+fn pow10_int(n : Int) -> Int {
+  let mut r = 1
+  for i = 0; i < n; i = i + 1 {
+    r = r * 10
+  }
+  r
+}
+
+fn group_thousands(s : String) -> String {
+  let chars = s.to_array()
+  let len = chars.length()
+  let mut out : Array[Char] = []
+  for i = 0; i < len; i = i + 1 {
+    if i != 0 && i % 3 == 0 {
+      out.push(',')
+    }
+    out.push(chars[len - 1 - i])
+  }
+  out.to_string()
+}
+
+fn pad_left(s : String, width : Int, ch : Char) -> String {
+  let len = s.length()
+  if len >= width {
+    return s
+  }
+  let mut prefix = ""
+  for _ = 0; < width - len; _ = _ + 1 {
+    prefix = prefix + ch.to_string()
+  }
+  prefix + s
+}
+
+/// Map a power-of-ten exponent to its localized magnitude word id (used by the
+/// localized `scientific`). Falls back to the raw exponent string for powers
+/// not covered by the catalog.
+fn exponent_word_id(exponent : Int) -> MsgId {
+  match exponent {
+    3 => EXPword1
+    6 => EXPword2
+    9 => EXPword3
+    12 => EXPword4
+    15 => EXPword5
+    18 => EXPword6
+    _ => EXPword1
+  }
+}
+
+/// Format a real number in scientific notation, localized via the i18n catalog.
+///
+/// Uses the `scientific_tmpl` message (`"%s x 10^%s"` for en, `"%s × 10^%s"`
+/// for ru_RU, `"%s×10^%s"` for zh/zh_CN) and substitutes the mantissa and a
+/// localized magnitude word for the exponent when available.
+pub fn scientific(
+  value : Double,
+  precision~ : Int = 6,
+  exponent~ : Int = 3,
+  locale~ : Locale = match current_locale() {
+    Some(l) => l
+    None => En
+  }
+) -> String {
+  let mantissa = value / pow10_double(exponent)
+  let m = format_fixed(mantissa, precision)
+  let exp_words = msg_str(locale, exponent_word_id(exponent)).to_string()
+  let exp_repr = if exp_words == "" {
+    exponent.to_string()
+  } else {
+    exp_words
+  }
+  msg_str(locale, SCItmpl).format([m, exp_repr])
+}
+
 /// Convert an integer (given as String) to its English ordinal, e.g. "1st".
 /// Mirrors python-humanize `ordinal` (gender ignored, uses male form).
 pub fn ordinal(value : String) -> String {

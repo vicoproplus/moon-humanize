@@ -75,3 +75,38 @@ test "ordinal" {
   @test.assert_eq(ordinal("23"), "23rd")
   @test.assert_eq(ordinal("foo"), "foo")
 }
+
+test "to_scientific" {
+  @test.assert_eq(to_scientific(3.14159, 2, 3), "3.14 x 10^3")
+  @test.assert_eq(to_scientific(500.0, 2, 2), "5.00 x 10^2")
+  @test.assert_eq(to_scientific(0.000789, 2, -3), "789.00 x 10^-3")
+}
+
+test "to_decimal" {
+  @test.assert_eq(to_decimal(1234567.891, decimals=2), "1,234,567.89")
+  @test.assert_eq(to_decimal(1234.5, decimals=0), "1,235")
+  @test.assert_eq(to_decimal(-0.5, decimals=1), "-0.5")
+  @test.assert_eq(to_decimal(100.0, decimals=2), "100.00")
+}
+
+test "integer_to_words" {
+  @test.assert_eq(integer_to_words(0), "zero")
+  @test.assert_eq(integer_to_words(123), "one hundred and twenty-three")
+  @test.assert_eq(integer_to_words(1000000), "one million")
+  @test.assert_eq(integer_to_words(-45), "negative forty-five")
+  @test.assert_eq(integer_to_words(1234567), "one million two hundred and thirty-four thousand five hundred and sixty-seven")
+}
+
+test "scientific_double_localized" {
+  // default (no locale) falls back to English template "%s x 10^%s"
+  @test.assert_eq(scientific(3.14159, 2, 3), "3.14 x 10^3")
+  // ru_RU uses the "×" connector
+  activate("ru_RU")
+  @test.assert_eq(scientific(3.14159, 2, 3), "3.14 × 10^3")
+  // zh_CN / zh use the no-space connector
+  activate("zh_CN")
+  @test.assert_eq(scientific(3.14159, 2, 3), "3.14×10^3")
+  activate("zh")
+  @test.assert_eq(scientific(3.14159, 2, 3), "3.14×10^3")
+  deactivate()
+}

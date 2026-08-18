@@ -362,3 +362,24 @@ msgstr "昨天"
 #, python-format
 msgid "%s and %s"
 msgstr ""
+
+msgid "scientific_tmpl"
+msgstr "%s×10^%s"
+
+msgid "EXPword1"
+msgstr "千"
+
+msgid "EXPword2"
+msgstr "百万"
+
+msgid "EXPword3"
+msgstr "十亿"
+
+msgid "EXPword4"
+msgstr "万亿"
+
+msgid "EXPword5"
+msgstr "京"
+
+msgid "EXPword6"
+msgstr "百万"

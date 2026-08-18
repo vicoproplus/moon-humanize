@@ -58,6 +58,8 @@ LOCALE_CTORS = {
     "vi_VN": "ViVN",
     "zh_CN": "ZhCN",
     "zh_HK": "ZhHK",
+    "zh": "Zh",
+    "en": "En",
 }
 
 # Thousands / decimal separators mirror python-humanize's i18n.py maps.

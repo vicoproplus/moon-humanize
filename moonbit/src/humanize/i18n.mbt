@@ -48,14 +48,17 @@ pub enum Locale {
   ViVN
   ZhCN
   ZhHK
+  En
+  Zh
 }
 
 /// Parse a raw locale identifier (e.g. `"zh_CN"`, `"en_GB"`, `"fr_FR"`) into a
 /// `Locale`. Returns `None` if the locale is unknown or an English variant
 /// (English locales use no translation, matching python-humanize behaviour).
 pub fn Locale::from_string(locale : String) -> Option[Locale] {
-  // English and unknown locales fall through to no translation.
-  if locale.has_prefix("en") {
+  // English and unknown locales fall through to no translation. The bare `en`
+  // locale is activated explicitly (it carries its own English catalog).
+  if locale.has_prefix("en_") {
     return None
   }
   match locale {
@@ -95,6 +98,8 @@ pub fn Locale::from_string(locale : String) -> Option[Locale] {
     "vi_VN" => Some(ViVN)
     "zh_CN" => Some(ZhCN)
     "zh_HK" => Some(ZhHK)
+    "en" => Some(En)
+    "zh" => Some(Zh)
     _ => None
   }
 }
@@ -232,4 +237,100 @@ pub fn decimal_separator() -> String {
     None => "."
     Some(loc) => decimal_sep_for(loc)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Message identifiers (Feature 2: i18n-aware scientific notation)
+// ---------------------------------------------------------------------------
+
+/// Logical identifiers for humanize messages that participate in localized
+/// formatting. `msg_str` resolves one (given a `Locale`) to a `MsgId` whose
+/// `format` method substitutes positional `%s` placeholders.
+///
+/// Not every locale ships every key (only `en`/`ru_RU`/`zh`/`zh_CN` currently
+/// carry the scientific-notation keys). `msg_str` falls back to the English
+/// catalog, then to the raw key string, so formatting is always total.
+pub enum MsgKey {
+  ERR
+  SEC
+  MIN
+  HR
+  DAY
+  WK
+  NOW
+  RECENT
+  FUTURE
+  PAST
+  SCItmpl
+  EXPword1
+  EXPword2
+  EXPword3
+  EXPword4
+  EXPword5
+  EXPword6
+}
+
+/// A message id already resolved to its translated template string for a
+/// locale. `format` substitutes positional `%s` placeholders.
+pub struct MsgId {
+  template : String
+}
+
+/// The `.po` msgid string for a given `MsgKey`.
+fn msgid_of(self : MsgKey) -> String {
+  match self {
+    ERR => "an error occurred"
+    SEC => "second"
+    MIN => "minute"
+    HR => "hour"
+    DAY => "day"
+    WK => "week"
+    NOW => "just now"
+    RECENT => "recently"
+    FUTURE => "from now"
+    PAST => "ago"
+    SCItmpl => "scientific_tmpl"
+    EXPword1 => "EXPword1"
+    EXPword2 => "EXPword2"
+    EXPword3 => "EXPword3"
+    EXPword4 => "EXPword4"
+    EXPword5 => "EXPword5"
+    EXPword6 => "EXPword6"
+  }
+}
+
+/// Resolve a message key to its translated template string in `locale`, falling
+/// back to the English catalog and finally to the msgid itself.
+pub fn msg_str(locale : Locale, id : MsgKey) -> MsgId {
+  let key = id.msgid_of()
+  let en = lookup_message(En, key, key)
+  let resolved = lookup_message(locale, key, en)
+  { template: resolved }
+}
+
+/// Substitute positional `%s` placeholders in the template with `args`.
+pub fn format(self : MsgId, args : Array[String]) -> String {
+  let mut out = ""
+  let mut arg_i = 0
+  let chars = self.template.to_array()
+  let len = chars.length()
+  let mut i = 0
+  while i < len {
+    if chars[i] == '%' && i + 1 < len && chars[i + 1] == 's' {
+      if arg_i < args.length() {
+        out = out + args[arg_i]
+        arg_i = arg_i + 1
+      }
+      i = i + 2
+    } else {
+      out = out + chars[i].to_string()
+      i = i + 1
+    }
+  }
+  out
+}
+
+/// The raw resolved template (no substitution).
+pub fn to_string(self : MsgId) -> String {
+  self.template
 }

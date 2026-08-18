@@ -197,6 +197,17 @@ python3 -m pip install -e .
 '1 x 10⁰'
 ```
 
+MoonBit 另外提供 locale 感知的科学计数法重载，以及纯数值辅助函数：
+
+```moonbit
+// 本地化科学计数法（根据激活的语言区域选择连接符）
+scientific(3.14159, precision=2, exponent=3)        // "3.14 x 10^3"（en）/ "3.14 × 10^3"（ru_RU）/ "3.14×10^3"（zh）
+// 纯数值辅助
+to_scientific(3.14159, 2, 3)   // "3.14 x 10^3"
+to_decimal(1234567.891, decimals=2)  // "1,234,567.89"
+integer_to_words(123)          // "one hundred and twenty-three"
+```
+
 ## 本地化（Localization）
 
 如何在运行时切换语言区域（locale）：
@@ -241,6 +252,13 @@ msginit -i humanize.pot -o humanize/locale/<locale name>/LC_MESSAGES/humanize.po
 ```
 
 其中 `<locale name>` 是语言区域缩写，例如 `en_GB`、`pt_BR`，或简写为 `ru`、`fr`` 等。
+
+请在本 README 顶部列出该语言。
+
+> 科学计数法本地化：新增了 `scientific_tmpl`（连接符模板）与 `EXPword1`–`EXPword6`
+> （量级词：千 / 百万 / 十亿 / 万亿 / 京 / 百万）两条消息键，目前已在 `en`、`ru_RU`、`zh`、`zh_CN`
+> 四个语言区域中提供；其余语言区域会自动回退到英文模板。新增语言区域时若需本地化科学计数法，
+> 请在其 `.po` 中补充这两个键。
 
 请在本 README 顶部列出该语言。
 
@@ -318,6 +336,10 @@ pub fn intcomma_int(n : Int) -> String
 | `humanize.apnumber(value)` | `apnumber(value : String)` | 0–9 转为英文单词，其余保持数字串。 |
 | `humanize.fractional(value)` | `fractional(value : String)` | 浮点转为分数 / 带分数。 |
 | `humanize.scientific(value, precision)` | `scientific(value : String, ~precision)` | 科学计数法，指数用上标渲染（`10ⁿ`）。 |
+| — | `scientific(value : Double, ~precision, ~exponent, ~locale)` | locale 感知的科学计数法重载，连接符（`x` / `×` / 无空格）由激活的语言区域决定。 |
+| — | `to_scientific(value : Double, ~precision, ~exponent)` | 纯数值科学计数法（locale 中性，用 ` x 10^`）。 |
+| — | `to_decimal(value : Double, ~decimals)` | 千分位分组 + 固定小数位（`"1,234,567.89"`）。 |
+| — | `integer_to_words(n : Int)` | 整数英文拼读（`"one hundred and twenty-three"`）。 |
 | `humanize.ordinal(value)` | `ordinal(value : String)` | 英文序数后缀（`1st` / `2nd` / `3rd` …）。 |
 
 > 注意：MoonBit 版本的函数入参普遍为 **`String`**（而非 Python 的各类数值类型），内部再做解析，

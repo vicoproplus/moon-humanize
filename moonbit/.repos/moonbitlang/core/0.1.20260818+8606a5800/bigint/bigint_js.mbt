@@ -1,0 +1,753 @@
+// Copyright 2026 International Digital Economy Academy
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+///|
+type BigInt
+
+///|
+let zero = 0N
+
+///|
+/// Parses a string into a `BigInt` using the specified base (2 to 36).
+///
+/// Returns an error if the input is malformed or the base is invalid.
+#internal(internal, "use `@string.parse_bigint` instead")
+#doc(hidden)
+pub fn parse_bigint(str : StringView, base? : Int = 10) -> BigInt raise {
+  if base < 2 || base > 36 {
+    base_err()
+  }
+  if str.is_empty() {
+    syntax_err()
+  }
+  match str.unsafe_get(str.length() - 1) {
+    '0'..='9' | 'A'..='Z' | 'a'..='z' => ()
+    _ => syntax_err()
+  }
+  if base == 10 {
+    match str {
+      ['0', 'x' | 'X' | 'o' | 'O' | 'b' | 'B', ..]
+      | ['-', '0', 'x' | 'X' | 'o' | 'O' | 'b' | 'B', ..] => syntax_err()
+      ['0'..='9', ..] | ['-', '0'..='9', ..] => ()
+      _ => syntax_err()
+    }
+  }
+  match base {
+    2 | 8 | 10 | 16 =>
+      match
+        BigInt::js_parse_string(
+          str.data(),
+          str.start_offset(),
+          str.start_offset() + str.length(),
+          base,
+          value => Some(value),
+          None,
+        ) {
+        Some(value) => value
+        None => syntax_err()
+      }
+    _ => BigInt::from_string_radix(str, base)
+  }
+}
+
+///|
+extern "js" fn BigInt::js_parse_string(
+  str : String,
+  start : Int,
+  end : Int,
+  base : Int,
+  some : (BigInt) -> BigInt?,
+  none : BigInt?,
+) -> BigInt? =
+  #|(str, start, end, base, some, none) => {
+  #|  try {
+  #|    if (base === 10) {
+  #|      const input = start === 0 && end === str.length ? str : str.slice(start, end);
+  #|      return some(BigInt(input));
+  #|    }
+  #|    const negative = str.charCodeAt(start) === 45;
+  #|    const digits = str.slice(negative ? start + 1 : start, end);
+  #|    const prefix = base === 2 ? "0b" : base === 8 ? "0o" : "0x";
+  #|    const value = BigInt(prefix + digits);
+  #|    return some(negative ? -value : value);
+  #|  } catch (_) {
+  #|    return none;
+  #|  }
+  #|}
+
+///|
+/// Converts a string representation in the specified radix to a BigInt value.
+///
+/// Panics if the input is malformed. Use `@string.parse_bigint` to handle errors.
+pub fn BigInt::from_string(str : String, radix? : Int = 10) -> BigInt {
+  parse_bigint(str.view(), base=radix) catch {
+    Failure(msg) => abort(msg)
+    _ => abort("invalid syntax")
+  }
+}
+
+///|
+fn digit_from_char(x : Int) -> Int {
+  match x {
+    '0'..='9' => x - '0'
+    'A'..='Z' => x + (10 - 'A')
+    'a'..='z' => x + (10 - 'a')
+    _ => -1
+  }
+}
+
+///|
+fn pow2_shift(radix : Int) -> Int? {
+  if radix >= 2 && (radix & (radix - 1)) == 0 {
+    Some(radix.ctz())
+  } else {
+    None
+  }
+}
+
+///|
+fn BigInt::from_string_radix(str : StringView, radix : Int) -> BigInt raise {
+  let len = str.length()
+  let sign = if str.unsafe_get(0) == '-' { -1 } else { 1 }
+  let start = if sign == -1 { 1 } else { 0 }
+  if start == len {
+    syntax_err()
+  }
+  let mut acc = 0N
+  match pow2_shift(radix) {
+    Some(shift) =>
+      for i in start..<len {
+        let digit = digit_from_char(str.unsafe_get(i).to_int())
+        if digit < 0 || digit >= radix {
+          syntax_err()
+        }
+        acc = (acc << shift) | BigInt::from_int(digit)
+      }
+    None => {
+      let base = BigInt::from_int(radix)
+      for i in start..<len {
+        let digit = digit_from_char(str.unsafe_get(i).to_int())
+        if digit < 0 || digit >= radix {
+          syntax_err()
+        }
+        acc = acc * base + BigInt::from_int(digit)
+      }
+    }
+  }
+  if sign == -1 {
+    -acc
+  } else {
+    acc
+  }
+}
+
+///|
+/// Converts a `BigInt` value to a string representation in the specified radix.
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value to convert to a string.
+/// * `radix` : The base to use for formatting (2 to 36). Defaults to 10.
+///
+/// Returns a string containing the representation of the number in the given
+/// radix, with a leading minus sign for negative numbers. Digits above 9 use
+/// lowercase letters (`a` to `z`).
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let n = 12345678901234567890N
+///   inspect(n.to_string(), content="12345678901234567890")
+///   inspect(n.to_string(radix=16), content="ab54a98ceb1f0ad2")
+///   let neg = -42N
+///   inspect(neg.to_string(), content="-42")
+///   let zero = 0N
+///   inspect(zero.to_string(), content="0")
+/// }
+/// ```
+pub fn BigInt::to_string(self : BigInt, radix? : Int = 10) -> String {
+  if radix < 2 || radix > 36 {
+    abort("radix must be between 2 and 36")
+  }
+  BigInt::js_to_string_radix(self, radix)
+}
+
+///|
+extern "js" fn BigInt::js_to_string_radix(self : BigInt, radix : Int) -> String =
+  #|(x, radix) => x.toString(radix)
+
+///|
+extern "js" fn hex2(b : Byte) -> String =
+  #|(x) => x.toString(16).padStart(2, '0')
+
+///|
+/// Converts a big-endian byte sequence to a `BigInt` value with an optional
+/// sign.
+///
+/// Parameters:
+///
+/// * `octets` : A sequence of bytes representing the magnitude of the number in
+/// big-endian order. It must not be empty unless `signum` is 0.
+/// * `signum` : The sign of the resulting number. A negative value creates a
+/// negative number, zero returns zero, and a positive value creates a positive
+/// number. Defaults to 1.
+///
+/// Returns a `BigInt` value represented by the byte sequence and sign.
+pub fn BigInt::from_octets(octets : BytesView, signum? : Int = 1) -> BigInt {
+  if signum < 0 {
+    return -1N * BigInt::from_octets(octets, signum=1)
+  }
+  if signum == 0 {
+    return 0N
+  }
+  if octets.is_empty() {
+    abort("empty octet string")
+  }
+  let str = StringBuilder()
+  for octet in octets {
+    str.write_string(hex2(octet))
+  }
+  parse_bigint(str.to_string().view(), base=16) catch {
+    Failure(msg) => abort(msg)
+    _ => abort("invalid syntax")
+  }
+}
+
+///|
+/// Converts a non-negative `BigInt` to a big-endian byte sequence.
+///
+/// Parameters:
+///
+/// * `self` : The arbitrary-precision integer to convert. Must be
+/// non-negative.
+/// * `length` : Optional minimum length of the output byte sequence. When the
+/// requested length is larger than the natural representation, the result is
+/// padded with leading zeros.
+///
+/// Returns a byte sequence representing the number in big-endian order.
+///
+/// Throws a panic if the input number is negative, or if `length` is zero or
+/// negative for a non-zero input.
+pub fn BigInt::to_octets(self : BigInt, length? : Int) -> Bytes {
+  if self < 0 {
+    abort("negative BigInt")
+  }
+  if self == 0 {
+    return match length {
+      Some(len) => Bytes::make(len, 0)
+      None => [0]
+    }
+  }
+  let buf = []
+  for v = self {
+    if v > 0 {
+      buf.push(v.to_byte())
+      continue v >> 8
+    } else {
+      break
+    }
+  }
+  let buf_len = buf.length()
+  match length {
+    Some(len) => {
+      if len <= 0 {
+        abort("negative length")
+      }
+      if len > buf_len {
+        Bytes::makei(len, i => {
+          let padding = len - buf_len
+          if i < padding {
+            0
+          } else {
+            buf[buf_len - (i - padding) - 1]
+          }
+        })
+      } else {
+        Bytes::makei(buf_len, i => buf[buf_len - i - 1])
+      }
+    }
+    None => Bytes::makei(buf_len, i => buf[buf_len - i - 1])
+  }
+}
+
+///|
+extern "js" fn BigInt::compare_js(self : BigInt, other : BigInt) -> Int =
+  #|(x, y) => x < y ? -1 : x > y ? 1 : 0
+
+///|
+pub impl Compare for BigInt with fn compare(self, other) {
+  self.compare_js(other)
+}
+
+///|
+extern "js" fn BigInt::equal_js(self : BigInt, other : BigInt) -> Bool =
+  #|(x, y) => x === y
+
+///|
+pub impl Eq for BigInt with fn equal(self, other) {
+  self.equal_js(other)
+}
+
+///|
+/// Converts a 32-bit signed integer to a `BigInt`.
+///
+/// Parameters:
+///
+/// * `x` : The 32-bit signed integer to be converted.
+///
+/// Returns a `BigInt` equivalent to the input integer.
+pub extern "js" fn BigInt::from_int(x : Int) -> BigInt =
+  #|(x) => BigInt(x)
+
+///|
+/// Converts an unsigned 32-bit integer to a `BigInt`.
+///
+/// Parameters:
+///
+/// * `x` : The unsigned 32-bit integer to be converted.
+///
+/// Returns a `BigInt` representing the same numerical value as the input.
+pub extern "js" fn BigInt::from_uint(x : UInt) -> BigInt =
+  #|(x) => BigInt(x >>> 0)
+
+///|
+/// Converts a signed 64-bit integer to a `BigInt`.
+///
+/// Parameters:
+///
+/// * `x` : The signed 64-bit integer to be converted.
+///
+/// Returns a `BigInt` value that represents the same numerical value as the
+/// input.
+pub extern "js" fn BigInt::from_int64(x : Int64) -> BigInt =
+  #|(x) => BigInt.asIntN(64, x)
+
+///|
+/// Converts an unsigned 64-bit integer to a `BigInt`.
+///
+/// Parameters:
+///
+/// * `x` : The unsigned 64-bit integer to be converted.
+///
+/// Returns a `BigInt` with the same value as the input.
+pub fn BigInt::from_uint64(x : UInt64) -> BigInt = "%identity"
+
+///|
+/// Checks whether a `BigInt` value is equal to zero.
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value to be checked.
+///
+/// Returns `true` if the `BigInt` is zero, `false` otherwise.
+pub extern "js" fn BigInt::is_zero(self : BigInt) -> Bool =
+  #|(x) => x === 0n
+
+///|
+extern "js" fn BigInt::op_neg_ffi(self : BigInt) -> BigInt =
+  #|(x) => -x
+
+///|
+pub impl Neg for BigInt with fn neg(self) {
+  self.op_neg_ffi()
+}
+
+///|
+extern "js" fn BigInt::op_add_ffi(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x + y
+
+///|
+pub impl Add for BigInt with fn add(self, other) {
+  self.op_add_ffi(other)
+}
+
+///|
+extern "js" fn BigInt::op_sub_ffi(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x - y
+
+///|
+pub impl Sub for BigInt with fn sub(self, other) {
+  self.op_sub_ffi(other)
+}
+
+///|
+extern "js" fn BigInt::op_mul_ffi(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x * y
+
+///|
+pub impl Mul for BigInt with fn mul(self, other) {
+  self.op_mul_ffi(other)
+}
+
+///|
+extern "js" fn BigInt::op_div_ffi(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x / y
+
+///|
+pub impl Div for BigInt with fn div(self, other) {
+  self.op_div_ffi(other)
+}
+
+///|
+extern "js" fn BigInt::op_mod_ffi(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x % y
+
+///|
+pub impl Mod for BigInt with fn mod(self, other) {
+  self.op_mod_ffi(other)
+}
+
+///|
+extern "js" fn BigInt::modpow_ffi(
+  self : BigInt,
+  exponent : BigInt,
+  modulus : BigInt,
+) -> BigInt =
+  #|(x, y, z) => {
+  #|  if (z === 1n) return 0n;
+  #|  let result = 1n;
+  #|  x = ((x % z) + z) % z;
+  #|  while (y > 0n) {
+  #|    if (y & 1n) {
+  #|       result = (result * x) % z;
+  #|    }
+  #|    y >>= 1n;
+  #|    x = (x * x) % z;
+  #|  }
+  #|  return result;
+  #|}
+
+///|
+extern "js" fn BigInt::pow_ffi(self : BigInt, exponent : BigInt) -> BigInt =
+  #|(x, y) => x ** y
+
+///|
+/// Computes the result of raising a `BigInt` to the power of another `BigInt`,
+/// with an optional modulus.
+///
+/// Parameters:
+///
+/// * `self` : The base number to be raised to a power.
+/// * `exponent` : The exponent. It must be non-negative.
+/// * `modulus` : Optional modulus for modular exponentiation. If provided, it
+/// must be positive.
+///
+/// Returns the result of the exponentiation, or the result modulo `modulus` if a
+/// modulus is provided.
+///
+/// Throws a panic if the exponent is negative or if the provided modulus is zero
+/// or negative.
+pub fn BigInt::pow(
+  self : BigInt,
+  exponent : BigInt,
+  modulus? : BigInt,
+) -> BigInt {
+  if exponent < 0 {
+    abort("negative exponent")
+  }
+  match modulus {
+    Some(modulus) =>
+      if modulus <= 0 {
+        abort("non-positive modulus")
+      } else {
+        self.modpow_ffi(exponent, modulus)
+      }
+    None => self.pow_ffi(exponent)
+  }
+}
+
+///|
+extern "js" fn BigInt::to_byte(self : BigInt) -> Byte =
+  #|(x) => Number(BigInt.asUintN(8, x)) | 0
+
+///|
+pub impl Shl for BigInt with fn shl(self : BigInt, n : Int) -> BigInt {
+  if n < 0 {
+    abort("negative shift count")
+  }
+  self.js_shl(n)
+}
+
+///|
+pub impl Shr for BigInt with fn shr(self : BigInt, n : Int) -> BigInt {
+  if n < 0 {
+    abort("negative shift count")
+  }
+  self.js_shr(n)
+}
+
+///|
+extern "js" fn BigInt::js_shl(self : BigInt, other : Int) -> BigInt =
+  #|(x, y) => x << BigInt(y)
+
+///|
+extern "js" fn BigInt::js_shr(self : BigInt, other : Int) -> BigInt =
+  #|(x, y) => x >> BigInt(y)
+
+///|
+extern "js" fn BigInt::js_land(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x & y
+
+///|
+pub impl BitAnd for BigInt with fn land(self, other) {
+  self.js_land(other)
+}
+
+///|
+extern "js" fn BigInt::js_lor(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x | y
+
+///|
+/// Performs a bitwise OR operation between two arbitrary-precision integers,
+/// following two's complement representation for negative numbers.
+///
+/// Parameters:
+///
+/// * `self` : The first arbitrary-precision integer operand.
+/// * `other` : The second arbitrary-precision integer operand.
+///
+/// Returns a new `BigInt` representing the result of the bitwise OR operation.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let a = @bigint.BigInt::from_string("42")
+///   let b = @bigint.BigInt::from_string("-12")
+///   inspect(a | b, content="-2")
+///   let c = @bigint.BigInt::from_string("-8")
+///   let d = @bigint.BigInt::from_string("-4")
+///   inspect(c | d, content="-4")
+/// }
+/// ```
+///
+pub impl BitOr for BigInt with fn lor(self, other) {
+  self.js_lor(other)
+}
+
+///|
+extern "js" fn BigInt::js_lxor(self : BigInt, other : BigInt) -> BigInt =
+  #|(x, y) => x ^ y
+
+///|
+/// Performs a bitwise XOR (exclusive OR) operation between two
+/// arbitrary-precision integers, treating them as two's complement binary
+/// numbers.
+///
+/// The XOR operation compares each bit position of both operands and returns 1
+/// if the bits are different, 0 if they are the same. For negative numbers, the
+/// operation is performed using two's complement representation.
+///
+/// Parameters:
+///
+/// * `self` : The first `BigInt` operand for the XOR operation.
+/// * `other` : The second `BigInt` operand for the XOR operation.
+///
+/// Returns a new `BigInt` value representing the bitwise XOR of the two
+/// operands.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let a = @bigint.BigInt::from_string("42") // 0b101010
+///   let b = @bigint.BigInt::from_string("25") // 0b011001
+///   inspect(a ^ b, content="51") // 0b110011
+///   let a = @bigint.BigInt::from_string("42")
+///   let b = @bigint.BigInt::from_string("-7")
+///   inspect(a ^ b, content="-45")
+///   let a = @bigint.BigInt::from_string("42")
+///   inspect(a ^ a, content="0") // XOR with self gives 0
+/// }
+/// ```
+///
+pub impl BitXOr for BigInt with fn lxor(self, other) {
+  self.js_lxor(other)
+}
+
+///|
+/// Converts a `BigInt` to an unsigned 32-bit integer (`UInt`).
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value to be converted.
+///
+/// Returns a `UInt` value representing the lower 32 bits of the input `BigInt`.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let n = 42N
+///   inspect(n.to_uint(), content="42")
+///   let neg = -1N
+///   inspect(neg.to_uint(), content="4294967295") // 2^32 - 1
+/// }
+/// ```
+pub extern "js" fn BigInt::to_uint(self : BigInt) -> UInt =
+  #|(x) => Number(BigInt.asUintN(32, x)) | 0
+
+///|
+/// Converts a `BigInt` to a 32-bit signed integer (`Int`).
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value to be converted.
+///
+/// Returns a 32-bit signed integer representing the lower 32 bits of the input
+/// `BigInt`.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let big = 2147483648N // 2^31
+///   inspect(big.to_int(), content="-2147483648") // Overflow to Int.min_value
+/// }
+/// ```
+pub extern "js" fn BigInt::to_int(self : BigInt) -> Int =
+  #|(x) => Number(BigInt.asIntN(32, x))
+
+///|
+/// Converts a `BigInt` to an unsigned 64-bit integer (`UInt64`).
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value to be converted.
+///
+/// Returns a `UInt64` value representing the lower 64 bits of the input
+/// `BigInt`.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let n = 12345678901234567890N
+///   inspect(n.to_uint64(), content="12345678901234567890")
+///   let neg = -1N
+///   inspect(neg.to_uint64(), content="18446744073709551615") // 2^64 - 1
+/// }
+/// ```
+pub fn BigInt::to_uint64(self : BigInt) -> UInt64 {
+  let hi = (self >> 32).to_uint()
+  let lo = self.to_uint()
+  (hi.to_uint64() << 32) | lo.to_uint64()
+}
+
+///|
+/// Converts a `BigInt` to a signed 64-bit integer (`Int64`).
+///
+/// Parameters:
+///
+/// * `value` : The `BigInt` value to be converted.
+///
+/// Returns a 64-bit signed integer (`Int64`) representing the lower 64 bits of
+/// the input `BigInt`.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let big = 9223372036854775807N // max value of Int64
+///   inspect(big.to_int64(), content="9223372036854775807")
+///   let bigger = big + 1
+///   inspect(bigger.to_int64(), content="-9223372036854775808") // Overflow to Int64.min_value
+/// }
+/// ```
+pub fn BigInt::to_int64(self : BigInt) -> Int64 {
+  let hi = (self >> 32).to_uint()
+  let lo = self.to_uint()
+  (hi.to_int64() << 32) | lo.to_int64()
+}
+
+///|
+/// Returns the number of bits required to represent a `BigInt` value in two's
+/// complement format, excluding the sign bit.
+///
+/// Parameters:
+///
+/// * `self` : The `BigInt` value whose bit length is to be calculated.
+///
+/// Example:
+///
+/// ```mbt check
+/// test {
+///   let pos = 16N // 10000
+///   inspect(pos.bit_length(), content="5")
+///   let neg = -16N // 
+///   inspect(neg.bit_length(), content="4")
+///   let zero = 0N
+///   inspect(zero.bit_length(), content="0")
+/// }
+/// ```
+pub extern "js" fn BigInt::bit_length(self : BigInt) -> Int =
+  #|(n) => {
+  #|  if (n >= 0) {
+  #|    return n === 0n ? 0 : n.toString(2).length;
+  #|  } else {
+  #|    const absN = -n;
+  #|    const absMinus1 = absN - 1n;
+  #|    return absMinus1 === 0n ? 0 : absMinus1.toString(2).length;
+  #|  }
+  #|}
+
+///|
+/// Returns the number of trailing zero bits in the binary representation of 
+/// the absolute value of this BigInt.
+///
+/// For zero, it returns 0.
+///
+/// Example:
+/// ```mbt check
+/// test {
+///   inspect(8N.ctz(), content="3") // 0b1000
+///   inspect(12N.ctz(), content="2") // 0b1100
+///   inspect(0N.ctz(), content="0")
+/// }
+/// ```
+pub extern "js" fn BigInt::ctz(self : BigInt) -> Int =
+  #|(n) => {
+  #|  if (n === 0n) return 0;
+  #|  let absN = n < 0n ? -n : n;
+  #|  let count = 0;
+  #|  while ((absN & 1n) === 0n) {
+  #|    absN >>= 1n;
+  #|    count++;
+  #|  }
+  #|  return count;
+  #|}
+
+///|
+extern "js" fn can_convert_to_int(x : BigInt) -> Bool =
+  #|(x) => x >= -(2n ** 31n) && x < 2n ** 31n
+
+///|
+extern "js" fn can_convert_to_int64(x : BigInt) -> Bool =
+  #|(x) => x >= -(2n ** 63n) && x < 2n ** 63n
+
+///|
+extern "js" fn is_neg(x : BigInt) -> Bool =
+  #|(x) => x < 0n
+
+///|
+fn BigInt::limbs(self : Self) -> Array[UInt] {
+  guard !self.is_zero() else { [0] }
+  let result = []
+  for n = self * BigInt::from_int(self.signum()); n > 0; n = n >> 32 {
+    let limb = n.to_uint()
+    result.push(limb)
+  }
+  result
+}

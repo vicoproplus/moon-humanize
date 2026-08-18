@@ -85,3 +85,27 @@ test "i18n T7 thousands separator respected by intcomma" {
   assert_false(grouped.contains(",234"))
   deactivate()
 }
+
+test "i18n msg_str_format" {
+  // English template uses " x 10^".
+  ignore(activate("en"))
+  assert_eq(msg_str(En, SCItmpl).format(["3.14", "thousand"]), "3.14 x 10^thousand")
+  // ru_RU connector is "×".
+  ignore(activate("ru_RU"))
+  assert_eq(msg_str(RuRU, SCItmpl).format(["3.14", "миллион"]), "3.14 × 10^миллион")
+  // zh_CN / zh use the no-space connector.
+  ignore(activate("zh_CN"))
+  assert_eq(msg_str(ZhCN, SCItmpl).format(["3.14", "百万"]), "3.14×10^百万")
+  ignore(activate("zh"))
+  assert_eq(msg_str(Zh, SCItmpl).format(["3.14", "百万"]), "3.14×10^百万")
+  deactivate()
+}
+
+test "i18n msg_str_fallback" {
+  // A locale that does not ship a key falls back to the English catalog.
+  // fr_FR has no scientific_tmpl; msg_str must still resolve via the En fallback.
+  ignore(activate("fr_FR"))
+  // Compare the fr_FR-resolved template against the English one (both "%s x 10^%s").
+  assert_eq(msg_str(FrFR, SCItmpl).to_string(), msg_str(En, SCItmpl).to_string())
+  deactivate()
+}

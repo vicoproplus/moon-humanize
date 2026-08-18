@@ -386,3 +386,24 @@ msgstr "вчера"
 #, python-format
 msgid "%s and %s"
 msgstr "%s и %s"
+
+msgid "scientific_tmpl"
+msgstr "%s × 10^%s"
+
+msgid "EXPword1"
+msgstr "тысяча"
+
+msgid "EXPword2"
+msgstr "миллион"
+
+msgid "EXPword3"
+msgstr "миллиард"
+
+msgid "EXPword4"
+msgstr "триллион"
+
+msgid "EXPword5"
+msgstr "квинтиллион"
+
+msgid "EXPword6"
+msgstr "секстиллион"
