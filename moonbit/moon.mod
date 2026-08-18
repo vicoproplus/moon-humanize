@@ -1,7 +1,7 @@
 // MoonBit module config for moon-humanize.
 // See docs/specs/port-to-moonbit.md.
 
-name = "yjdszjoe/moon-humanize"
+name = "vicoproplus/moon-humanize"
 
 version = "0.1.0"
 
