@@ -10,10 +10,18 @@ import {
 
 // `clock_wasm.mbt` defines `now()` (current time in ns) using `@env.now()`
 // from moonbitlang/core/env, so it is compiled only for the wasm / wasm-gc
-// backends. The native target has no wall-clock wiring, mirroring
-// python-humanize where `now()` is wasm-only.
+// backends (the primary deployment target for moon-humanize). `clock_native.mbt`
+// provides the same `now()` for the native backend so the package links and has
+// a working clock on every target (previously the native build failed to link
+// because `now()` was wasm-only).
+//
+// `wasm.mbt` is the explicit WASM export layer; it re-exports the package's
+// public surface for JavaScript / WASM consumers and is compiled only for the
+// wasm / wasm-gc backends.
 options(
   targets: {
     "clock_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "clock_native.mbt": [ "native" ],
+    "wasm.mbt": [ "wasm", "wasm-gc" ],
   },
 )

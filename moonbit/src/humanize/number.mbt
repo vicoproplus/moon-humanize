@@ -297,7 +297,9 @@ pub fn apnumber(value : String) -> String {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
     "nine",
   ]
-  words[n]
+  // User-visible word passes through gettext so locale catalogs (e.g. zh_CN,
+  // fr_FR) can translate it; English / unknown locales fall back to the word.
+  gettext(words[n])
 }
 
 /// Convert a float/number (given as String) to a human-readable fraction or
@@ -324,10 +326,10 @@ pub fn fractional(value : String) -> String {
     return format_fixed(whole.to_double(), 0)
   }
   if whole == 0 {
-    return numer.to_string() + "/" + denom.to_string()
+    return gettext(numer.to_string() + "/" + denom.to_string())
   }
   // mixed fraction; sign rides on whole part, abs on numerator
-  format_fixed(whole.to_double(), 0) + " " + numer.abs().to_string() + "/" + denom.to_string()
+  gettext(format_fixed(whole.to_double(), 0) + " " + numer.abs().to_string() + "/" + denom.to_string())
 }
 
 /// Render a number (given as String) in scientific notation "z.wq x 10ⁿ".
@@ -355,7 +357,9 @@ pub fn scientific(value : String, precision~ : Int = 2) -> String {
   let mant_str = format_fixed(mantissa, precision)
   let exp_str = to_superscript(exp.to_string())
   let sign = if neg { "-" } else { "" }
-  sign + mant_str + " x 10" + exp_str
+  // Whole expression passes through gettext so locale catalogs can translate
+  // the coefficient words / connector; English / unknown locales fall back.
+  gettext(sign + mant_str + " x 10" + exp_str)
 }
 
 /// Convert an integer (given as String) to its English ordinal, e.g. "1st".
@@ -375,5 +379,7 @@ pub fn ordinal(value : String) -> String {
   }
   let suffixes = ["th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"]
   let suffix = suffixes[digit]
-  n.to_string() + suffix
+  // User-visible ordinal passes through gettext so locale catalogs can
+  // translate the suffix form; English / unknown locales fall back.
+  gettext(n.to_string() + suffix)
 }

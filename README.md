@@ -335,8 +335,11 @@ intcomma_int(12345)                    // "12,345"
 ## 与 Python 版本的主要差异（已知移植差距）
 
 1. **入参类型**：Python 接受 `int` / `float` / `str` 等多种类型；MoonBit 统一用 `String`（数字需先转字符串）。
-2. **本地化（i18n）**：Python 通过 `gettext` 支持 30+ 语言区域；MoonBit 移植目前以英文输出为主，
-   多语言区域支持尚未完整实现（参见 `docs/i18n.md`）。
+2. **本地化（i18n）**：MoonBit 移植已接入 `gettext` / `ngettext` / `pgettext` 体系，
+   `apnumber` / `fractional` / `scientific` / `ordinal` 等用户可见文案已通过 `gettext` 路由，
+   可由 `src/humanize/locale/*/LC_MESSAGES/humanize.po` 提供多语言翻译；英文与未配置语言区域自动回退为英文。
+   翻译数据由 `scripts/po2mbt` 从 `.po` 文件生成 `moonbit/src/humanize/i18n_data.mbt`
+   （CI 中通过 `scripts/po2mbt --check` 确保二者同步）。
 3. **时间相关函数**：`naturalday` / `naturaltime` / `naturaldelta` / `precisedelta` / `naturalsize` 等
    依赖 `datetime` 与文件系统翻译数据，目前尚在移植规划中（参见 `docs/time.md`、`docs/filesize.md`、
    `docs/number.md` 等规格说明）。

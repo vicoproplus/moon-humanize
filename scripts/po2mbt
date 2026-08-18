@@ -558,6 +558,30 @@ def generate(locale_dir: str, out_path: str) -> None:
         fh.write("".join(out))
 
 
+def _generate_to_string(locale_dir: str) -> str:
+    """Run the generator and return the would-be contents without touching disk."""
+    import io
+    import contextlib
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        # generate() writes to a file path; to capture in-memory we temporarily
+        # point it at a temp file, then read it back.
+        import tempfile
+        import os as _os
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".mbt", delete=False, encoding="utf-8"
+        ) as tf:
+            tmp_path = tf.name
+        try:
+            generate(locale_dir, tmp_path)
+            with open(tmp_path, encoding="utf-8") as fh:
+                return fh.read()
+        finally:
+            _os.unlink(tmp_path)
+
+
 def main() -> int:
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.dirname(here)
@@ -565,8 +589,35 @@ def main() -> int:
     default_out = os.path.join(
         repo, "moonbit", "src", "humanize", "i18n_data.mbt"
     )
-    locale_dir = sys.argv[1] if len(sys.argv) > 1 else default_locale
-    out_path = sys.argv[2] if len(sys.argv) > 2 else default_out
+
+    args = sys.argv[1:]
+    check_mode = False
+    if args and args[0] == "--check":
+        check_mode = True
+        args = args[1:]
+
+    locale_dir = args[0] if len(args) > 0 else default_locale
+    out_path = args[1] if len(args) > 1 else default_out
+
+    if check_mode:
+        # Verify the committed i18n_data.mbt matches what the .po files produce.
+        # Exits non-zero (and prints the path) when it is out of date, so CI can
+        # fail fast instead of silently shipping stale translations.
+        if not os.path.isfile(out_path):
+            print(f"MISSING: {out_path} (run `scripts/po2mbt` to generate)")
+            return 1
+        generated = _generate_to_string(locale_dir)
+        with open(out_path, encoding="utf-8") as fh:
+            current = fh.read()
+        if generated != current:
+            print(
+                f"STALE: {out_path} is out of date with the .po files.\n"
+                f"       Regenerate it with: scripts/po2mbt"
+            )
+            return 1
+        print(f"OK: {out_path} is up to date")
+        return 0
+
     generate(locale_dir, out_path)
     print(f"wrote {out_path}")
     return 0
