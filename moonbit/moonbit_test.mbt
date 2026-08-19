@@ -38,3 +38,8 @@ test "precisedelta re-export" {
   let pd1 = @humanize.TimeInput::from_delta(@humanize.timedelta(seconds = 176592, microseconds = 5486))
   @test.assert_eq(precisedelta(pd1), "2 days, 1 hour, 3 minutes and 12.01 seconds")
 }
+
+test "naturalsize re-export" {
+  @test.assert_eq(naturalsize(1000000.0), "1.0 MB")
+  @test.assert_eq(naturalsize(1000000.0, binary = true), "976.6 KiB")
+}

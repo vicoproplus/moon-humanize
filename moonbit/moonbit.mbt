@@ -87,3 +87,13 @@ pub fn precisedelta(
 ) -> String {
   @humanize.precisedelta(value, minimum_unit~, format~, suppress~)
 }
+
+// —— filesize ——
+pub fn naturalsize(
+  value : Double,
+  binary~ : Bool = false,
+  gnu~ : Bool = false,
+  format~ : String = "%.1f",
+) -> String {
+  @humanize.naturalsize(value, binary~, gnu~, format~)
+}
