@@ -131,13 +131,13 @@ moon test
 ---
 
 ## 5. Open Questions / Dependencies
-1. **测试黄金值来源**: Python wheel 不含 `tests/`，官方黄金值在 GitHub `jmoiron/humanize/tests/`。采用"实时运行 Python 生成快照"方案，或在 CI 中拉取仓库 `tests/` 作对照。
-2. **工具链**: 当前本地 `moon`/`moonc`/core 版本不匹配（`moon 0.1.20260807` vs `moonc v0.10.8`），`moon build`/`moon test` 暂不可用。`get_translation` 的 MoonBit 实现可先写代码，待工具链修复后跑测试。
+1. **测试黄金值来源**: Python wheel 不含 `tests/`，官方黄金值在 GitHub `jmoiron/humanize/tests/`。采用"实时运行 Python 生成快照"方案，具体由 `scripts/gen_golden.py` 实现（输出合法 MoonBit 断言）。
+2. **工具链**: 已解决——`moon 0.1.20260819` / `moonc v0.10.9` 已对齐，`moon build` 成功、`moon test --target native` 可运行并全绿（44/44）。默认 wasm 目标在本机崩 `0xc0000139`（Windows 运行时已知问题，见 `docs/TOOLCHAIN-WINDOWS-ISSUE.md`），记为平台已知、不计入验收。
 3. `get_translation` 返回类型: 采用 `Option[Locale]`（复用 `current_locale()`），不引入新的 Translation 句柄类型，保持最小改动。如需返回翻译表句柄供高级用途，后续可扩展。
 
 ---
 
 ## 6. 成功标准
-- [ ] `i18n.get_translation()` 公开函数已添加且测试通过。
-- [ ] Gap Table #2–#20 全部经 Python 黄金值对照测试，输出逐字节一致（或记录已知差异并获确认）。
-- [ ] 文档 `docs/spec-align-humanize.md` 与实际实现对齐。
+- [x] `i18n.get_translation()` 公开函数已添加且测试通过（`i18n.mbt:192`）。
+- [x] Gap Table #2–#20 全部经 Python 黄金值对照测试（`moon test --target native` 44/44 通过），已知差异已记录（见 `docs/spec-align-humanize.md` §5）。
+- [x] 文档 `docs/spec-align-humanize.md` 与实际实现对齐，并补充本轮时间函数对齐（Date::today 默认、naturaldate 五年规则、naturaltime when~ 语义限制、filetime/natsize 跳过）。

@@ -8,9 +8,9 @@
 ## 0. 验证方法
 
 - 用 `python -c "import humanize; print(repr(humanize.<fn>(...)))"` 取得 Python 黄金值（真值）。
-- MoonBit 侧因工具链版本不匹配（`moon 0.1.20260807` vs `moonc v0.10.8`，core 快照无法加载）暂时无法 `moon build`/`moon test`，故 MoonBit 行为按源码静态判定，**未实际运行**。
-- 标注 `[已对齐]` = 静态判定与 Python 黄金值一致；`[差异]` = 存在不一致；`[缺失]` = Python 有而 MoonBit 无。
-- 2026-08-19 复审轮后：所有 golden 断言已由 `scripts/gen_golden.py --mbt` 重新生成，并用已安装 python-humanize 4.16.0 实测逐项校验；`moon test` 仍待工具链修复后运行。
+- 工具链已对齐（`moon 0.1.20260819` / `moonc v0.10.9`，同日），`moon build` 成功、`moon test --target native` 可运行（默认 wasm 目标在本机崩 `0xc0000139`，属 Windows 运行时已知问题，见 `docs/TOOLCHAIN-WINDOWS-ISSUE.md`）。MoonBit 行为已**实际运行**验证。
+- 标注 `[已对齐]` = 与 Python 黄金值一致（含运行验证）；`[差异]` = 存在不一致；`[缺失]` = Python 有而 MoonBit 无。
+- 所有 golden 断言由 `scripts/gen_golden.py --mbt` 生成，并用已安装 python-humanize 4.16.0 实测逐项校验；`moon test --target native` 全绿（44/44）。
 
 ---
 
@@ -169,7 +169,7 @@
 
 | 序号 | 项 | 类型 | 状态 | 实施动作 |
 |------|----|------|------|---------|
-| D1 | `get_translation()` 缺失 | 缺失 | ✅ 已实施 | `i18n.mbt` 新增 `pub fn get_translation() -> Option[Locale] = current_locale()`；`i18n_test.mbt` 加用例 |
+| D1 | `get_translation()` 缺失 | 缺失 | ✅ 已实施 | `i18n.mbt` 新增 `pub fn get_translation() -> Option[Locale] = current_locale()`（见 `i18n.mbt:192`）；`i18n_test.mbt` 加用例 |
 | D2 | `naturalsize` 无 `gnu`/`format=True` | 差异 | ✅ 已实施 | 新增 `gnu~ : Bool` 参数；复审后按 Python 4.16.0 逐分支重写：gnu 用 `gnu_symbols`（`"KMGTPEZYRQ"`）、base=1024、sub-threshold 整数渲染 + `suffix`（`"300B"`）、高于阈值无空格无后缀（`"2.9K"`/`"1.0K"`）；非 gnu sub-threshold 无视 `format` 输出整数；补 4.16.0 舍入进位（`999999→"1.0 MB"`） |
 | D3 | `natural_list` 2 元素用 `", "` 而非 `" and "` | 差异 | ✅ 已实施 | l==2 分支改为 `"a and b"`（#8） |
 | D4 | `natural_list` standard 默认连词 `"and/or"` | 差异 | ✅ 已实施 | `_get_conjs` 默认返回 `"and"`（#8） |
@@ -189,6 +189,10 @@
 2. **`natural_list` 为 Python 超集**：Python `natural_list` 不接受 `style`/`and`/`or` 参数；MoonBit 暴露 `style~`/`cx~`/`ox~` 作为扩展，默认输出与 Python 一致（复审后 `cx~` 已实际生效为分隔符）。
 3. **`format_fixed` 舍入**：`util.mbt:25` 注明采用 round-half-up，Python `%.Nf` 为 round-half-to-even。绝大多数输入无差异，仅在 `x.5` 边界可能不同；T3 断言已覆盖代表性输入，待实测。
 4. **`naturalsize` gnu 后缀怪癖**：Python `gnu=True` 在低于 1 单位时带 `suffix`（`"300B"`），高于 1 单位时**不带**（`"2.9K"`），`ls -sh` 风格。MoonBit 按此逐字节复刻（D2）。
+5. **`naturalday`/`naturaldate` 默认 `when~` = `Date::today()`**：由 `now()`（纳秒 epoch）换算本地日历日；修复了旧版硬编码 `2010-02-02` 导致永远不输出 today/yesterday/tomorrow 的问题。测试用固定 `when~` 隔离真实时钟依赖。
+6. **`naturaldate` 五年规则**：已按 Python 对齐（`abs(value-when).days >= 152` 时带年份 `"%b %d %Y"`，否则 `"%b %d"`）。Python `naturalday`/`naturaldate` 本身**无** `when` 形参（内部用 `date.today()`），MoonBit 的 `when~` 属超集扩展。
+7. **`naturaltime(when~)` 语义限制**：MoonBit `TimeInput` 仅相对输入（seconds/delta），对相对输入 `when~` 不改变输出（Python 对 timedelta/float 输入也由符号判定时态、`when` 抵消）。完全生效需后续引入绝对 datetime 输入（YAGNI，本次未做）。
+8. **`filetime`/`natsize`（Python deprecated）未实现**：建议改用 `naturalsize`，与 Python 现状一致跳过。
 
 ---
 
