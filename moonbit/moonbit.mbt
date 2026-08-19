@@ -60,3 +60,30 @@ pub fn naturaldate(
 ) -> String {
   @humanize.naturaldate(value, when~)
 }
+
+pub fn naturaldelta(
+  value : @humanize.TimeInput,
+  months~ : Bool = true,
+  minimum_unit~ : @humanize.TimeUnit = @humanize.TimeUnit::seconds(),
+) -> String {
+  @humanize.naturaldelta(value, months~, minimum_unit~)
+}
+
+pub fn naturaltime(
+  value : @humanize.TimeInput,
+  future~ : Bool = false,
+  months~ : Bool = true,
+  minimum_unit~ : @humanize.TimeUnit = @humanize.TimeUnit::seconds(),
+  when~ : @humanize.DateTime? = None,
+) -> String {
+  @humanize.naturaltime(value, future~, months~, minimum_unit~, when~)
+}
+
+pub fn precisedelta(
+  value : @humanize.TimeInput,
+  minimum_unit~ : @humanize.TimeUnit = @humanize.TimeUnit::seconds(),
+  format~ : String = "%0.2f",
+  suppress~ : Array[@humanize.TimeUnit] = [],
+) -> String {
+  @humanize.precisedelta(value, minimum_unit~, format~, suppress~)
+}
