@@ -48,14 +48,28 @@
 
 - [ ] **Step 1: 写失败测试**
 ```moonbit
-test "date today inverse" {
-  // _days_since_epoch(Date::today()) 必须等于 today 的真实 epoch 天；
-  // 因确定性难控，改测互逆：构造任意 Date，days_since_epoch -> today 路径不直接验；
-  // 这里仅验证 today() 返回合法日历日（月 1-12，日 1-31）。
+test "date today valid" {
+  // 仅验证 today() 返回合法日历日（不依赖真实时钟的具体值）
   let t = Date::today()
   @test.assert_eq(t.month >= 1 && t.month <= 12, true)
   @test.assert_eq(t.day >= 1 && t.day <= 31, true)
   @test.assert_eq(t.year > 1970, true)
+}
+
+test "date epoch roundtrip" {
+  // _gregorian_from_epoch_days 必须精确逆置现有 _days_since_epoch
+  let samples = [
+    Date::{ year: 1970, month: 1, day: 1 },
+    Date::{ year: 2026, month: 8, day: 19 },
+    Date::{ year: 2000, month: 2, day: 29 },
+    Date::{ year: 2024, month: 12, day: 31 },
+    Date::{ year: 1999, month: 3, day: 1 },
+  ]
+  for s in samples {
+    let z = _days_since_epoch(s)
+    let (y, m, d) = _gregorian_from_epoch_days(z)
+    @test.assert_eq((y, m, d), (s.year, s.month, s.day))
+  }
 }
 ```
 
@@ -74,11 +88,12 @@ pub fn Date::today() -> Date {
 }
 
 /// Inverse of `_days_since_epoch`: recover (year, month, day) from days since
-/// the proleptic-Gregorian epoch (same origin as `_days_since_epoch`).
+/// the proleptic-Gregorian epoch. Uses Howard Hinnant's civil-from-days
+/// (the exact inverse of the `_days_since_epoch` formula `era*146097+doe-719468`).
 fn _gregorian_from_epoch_days(z : Int) -> (Int, Int, Int) {
-  let days = if z >= 0 { z } else { z - 146096 }
-  let era = (days / 146097)
-  let doe = days - era * 146097
+  let z0 = z + 719468
+  let era = if z0 >= 0 { z0 } else { z0 - 146096 } / 146097
+  let doe = z0 - era * 146097
   let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
   let y = yoe + era * 400
   let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
@@ -116,7 +131,7 @@ Co-Authored-By: AtomCode (code) <noreply@atomgit.com>"
 - Consumes: `pub fn Date::today() -> Date`（Task 1）
 - Produces: 默认 `when~` 行为（不再硬编码 2010-02-02）
 
-- [ ] **Step 1: 写失败测试**（固定 `when~` 隔离真实时钟；Python 真值对照 `naturalday(value, when=today)`）
+- [ ] **Step 1: 写失败测试**（固定 `when~` 隔离真实时钟；期望字符串按 Python 格式化规则 `strftime("%b %d")` / `abs(diff)>=152 -> "%b %d %Y"` 推导——Python `naturalday`/`naturaldate` 无 `when` 形参，MoonBit 的 `when~` 为超集扩展，故用格式化规则取得真值）
 ```moonbit
 test "naturalday fixed when" {
   let today = Date::{ year: 2026, month: 8, day: 19 }
@@ -130,8 +145,8 @@ test "naturalday fixed when" {
 test "naturaldate fixed when" {
   let today = Date::{ year: 2026, month: 8, day: 19 }
   @test.assert_eq(naturaldate(Date::{ year: 2026, month: 8, day: 21 }, when~ = today), "Aug 21")
-  // 跨年但不足 152 天（d=-159 才触发，本例同年）走 "%b %d"
-  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 15 }, when~ = today), "Mar 15")
+  // diff = -157 (>=152) -> 带年份
+  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 15 }, when~ = today), "Mar 15 2026")
 }
 ```
 
