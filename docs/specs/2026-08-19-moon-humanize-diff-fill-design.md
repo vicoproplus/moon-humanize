@@ -46,15 +46,16 @@
 
 ### 2.1 新增 `Date::today()`
 ```moonbit
-// 由 epoch 秒换算本地日期，复用 clock_* 的 now() : Int64
+// 由 epoch 纳秒换算本地日期，复用 clock_* 的 now() : Int64（纳秒）
 pub fn Date::today() -> Date {
-  let secs = now()                 // Int64, UTC epoch 秒
-  let days_since_epoch = (secs / 86400L).to_int()
+  let nanos = now()                          // Int64, UTC epoch 纳秒
+  let days_since_epoch = (nanos / 86400_000_000_000L).to_int()
   let (y, m, d) = _gregorian_from_epoch_days(days_since_epoch)
   Date::{ year: y, month: m, day: d }
 }
 ```
-- `_gregorian_from_epoch_days` 与现有 `_days_since_epoch` 互逆（同历法算法，保证 today-relative 一致）。
+- `now()` 返回**纳秒**（`clock_native.mbt: now() = @env.now()毫秒 * 1e6`）；换算天数须除以 `86400_000_000_000L`。
+- `_gregorian_from_epoch_days` 与现有 `_days_since_epoch` 互逆（同历法算法，保证 today-relative 一致）；现有 `_days_since_epoch` 以 epoch 天为基准（`era*146097+doe-719468`），故 `_gregorian_from_epoch_days` 解该式还原 Y/M/D。
 - `now()` 返回 UTC epoch；WSL/CI 默认 UTC，故 `Date::today()` 在 WSL 下等于 UTC 日历日（与 Python `date.today()` 在 UTC 环境一致）。真实使用时以运行环境时区为准（文档记录）。
 
 ### 2.2 `naturalday` / `naturaldate` 默认 `when~` 改 `Date::today()`
