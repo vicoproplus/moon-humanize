@@ -44,3 +44,19 @@ pub fn ordinal(value : String) -> String {
 // Library version. Must stay in sync with moon.mod `version` and
 // src/humanize/wasm.mbt `wasm_version()` (see spec §5.3).
 pub let __version__ : String = "0.1.2"
+
+// —— time ——
+pub fn naturalday(
+  value : @humanize.Date,
+  when~ : @humanize.Date = @humanize.Date::today(),
+  format~ : String = "%b %d",
+) -> String {
+  @humanize.naturalday(value, when~, format~)
+}
+
+pub fn naturaldate(
+  value : @humanize.Date,
+  when~ : @humanize.Date = @humanize.Date::today(),
+) -> String {
+  @humanize.naturaldate(value, when~)
+}

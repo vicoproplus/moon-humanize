@@ -408,7 +408,7 @@ test "naturaltime when param compat" {
 // ---------------------------------------------------------------------------
 
 /// A calendar date (proleptic Gregorian).
-pub struct Date {
+pub(all) struct Date {
   year : Int
   month : Int
   day : Int
