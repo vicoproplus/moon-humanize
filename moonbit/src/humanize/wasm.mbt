@@ -14,7 +14,7 @@
 
 /// Library version string, exposed as a stable WASM entry probe.
 pub fn wasm_version() -> String {
-  "0.1.1"
+  "0.1.2"
 }
 
 /// Returns `true` once the WASM module has initialized (clock + i18n wired).

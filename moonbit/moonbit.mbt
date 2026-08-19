@@ -40,3 +40,7 @@ pub fn scientific(value : String, precision~ : Int = 2) -> String {
 pub fn ordinal(value : String) -> String {
   @humanize.ordinal(value)
 }
+
+// Library version. Must stay in sync with moon.mod `version` and
+// src/humanize/wasm.mbt `wasm_version()` (see spec §5.3).
+pub let __version__ : String = "0.1.2"
