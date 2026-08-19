@@ -363,8 +363,13 @@ pub fn naturaltime(
   value : TimeInput,
   future~ : Bool = false,
   months~ : Bool = true,
-  minimum_unit~ : TimeUnit = TimeUnit::SECONDS
+  minimum_unit~ : TimeUnit = TimeUnit::SECONDS,
+  when~ : DateTime? = None
 ) -> String {
+  // NOTE: MoonBit's `TimeInput` has no absolute-datetime variant, so for
+  // Seconds/Delta inputs `when~` does not change the output (Python also derives
+  // tense from sign and cancels `when` for timedelta/float inputs). Full effect
+  // requires an absolute datetime input, deferred (YAGNI).
   let (delta, is_future) = match value {
     TimeInput::Delta(d) => (d, d.is_neg)
     TimeInput::Seconds(s) => {
@@ -383,6 +388,21 @@ pub fn naturaltime(
   }
 }
 
+// naturaltime `when~` signature-compat test (whitebox). For relative inputs
+// (Seconds/Delta) `when~` does not change output (same as Python for timedelta/
+// float inputs), so passing when~=None must equal the no-`when` call.
+test "naturaltime when param compat" {
+  @test.assert_eq(
+    naturaltime(TimeInput::from_seconds(22.5), when = None),
+    "22 seconds ago",
+  )
+  @test.assert_eq(naturaltime(TimeInput::from_seconds(22.5)), "22 seconds ago")
+  @test.assert_eq(
+    naturaltime(TimeInput::from_delta(timedelta(days=1)), when = None),
+    "a day ago",
+  )
+}
+
 // ---------------------------------------------------------------------------
 // naturalday / naturaldate
 // ---------------------------------------------------------------------------
@@ -392,6 +412,21 @@ pub struct Date {
   year : Int
   month : Int
   day : Int
+}
+
+/// An absolute date-time. Declared to mirror python-humanize's `naturaltime(
+/// when=datetime)` reference point. NOTE: MoonBit's `TimeInput` only models
+/// *relative* durations (seconds/delta), so `when` does not currently change
+/// output for those inputs (Python also cancels `when` for timedelta/float
+/// inputs). Full effect requires an absolute-datetime `TimeInput` variant,
+/// deferred (YAGNI).
+pub struct DateTime {
+  year : Int
+  month : Int
+  day : Int
+  hour : Int
+  minute : Int
+  second : Int
 }
 
 /// Current local calendar day, derived from `now()` (nanosecond epoch).
