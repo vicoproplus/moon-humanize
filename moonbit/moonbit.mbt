@@ -107,3 +107,20 @@ pub fn natural_list(
 ) -> String {
   @humanize.natural_list(value, style~, cx~, ox~)
 }
+
+// —— i18n ——
+pub fn activate(locale : String) -> Option[@humanize.Locale] {
+  @humanize.activate(locale)
+}
+
+pub fn deactivate() -> Unit {
+  @humanize.deactivate()
+}
+
+pub fn decimal_separator() -> String {
+  @humanize.decimal_separator()
+}
+
+pub fn thousands_separator() -> String {
+  @humanize.thousands_separator()
+}

@@ -48,3 +48,14 @@ test "natural_list re-export" {
   @test.assert_eq(natural_list(["a", "b", "c"]), "a, b and c")
   @test.assert_eq(natural_list(["a", "b"], style = "or"), "a or b")
 }
+
+test "i18n re-export" {
+  // activate returns Some(locale) for a known locale; None for English/unknown.
+  @test.assert_eq(activate("ru_RU").is_some(), true)
+  @test.assert_eq(activate("en_US").is_none(), true)
+  // After deactivate we are back to English separators.
+  ignore(activate("ru_RU"))
+  deactivate()
+  @test.assert_eq(thousands_separator(), ",")
+  @test.assert_eq(decimal_separator(), ".")
+}
