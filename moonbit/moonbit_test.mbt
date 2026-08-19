@@ -43,3 +43,8 @@ test "naturalsize re-export" {
   @test.assert_eq(naturalsize(1000000.0), "1.0 MB")
   @test.assert_eq(naturalsize(1000000.0, binary = true), "976.6 KiB")
 }
+
+test "natural_list re-export" {
+  @test.assert_eq(natural_list(["a", "b", "c"]), "a, b and c")
+  @test.assert_eq(natural_list(["a", "b"], style = "or"), "a or b")
+}

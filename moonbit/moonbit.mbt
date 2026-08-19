@@ -97,3 +97,13 @@ pub fn naturalsize(
 ) -> String {
   @humanize.naturalsize(value, binary~, gnu~, format~)
 }
+
+// —— lists ——
+pub fn natural_list(
+  value : ArrayView[String],
+  style~ : String = "standard",
+  cx~ : String = ", ",
+  ox~ : String = " ",
+) -> String {
+  @humanize.natural_list(value, style~, cx~, ox~)
+}
