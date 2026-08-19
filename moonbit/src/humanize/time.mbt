@@ -388,10 +388,57 @@ pub fn naturaltime(
 // ---------------------------------------------------------------------------
 
 /// A calendar date (proleptic Gregorian).
-struct Date {
+pub struct Date {
   year : Int
   month : Int
   day : Int
+}
+
+/// Current local calendar day, derived from `now()` (nanosecond epoch).
+pub fn Date::today() -> Date {
+  let nanos = now()
+  let days_since_epoch = (nanos / 86400_000_000_000L).to_int()
+  let (y, m, d) = _gregorian_from_epoch_days(days_since_epoch)
+  Date::{ year: y, month: m, day: d }
+}
+
+/// Inverse of `_days_since_epoch`: recover (year, month, day) from days since
+/// the proleptic-Gregorian epoch. Uses Howard Hinnant's civil-from-days
+/// (exact inverse of `_days_since_epoch`'s `era*146097+doe-719468`).
+fn _gregorian_from_epoch_days(z : Int) -> (Int, Int, Int) {
+  let z0 = z + 719468
+  let era = (if z0 >= 0 { z0 } else { z0 - 146096 }) / 146097
+  let doe = z0 - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let y = yoe + era * 400
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let m = if mp < 10 { mp + 3 } else { mp - 9 }
+  let d = doy - (153 * mp + 2) / 5 + 1
+  let year = if m <= 2 { y + 1 } else { y }
+  (year, m, d)
+}
+
+test "date today valid" {
+  let t = Date::today()
+  @test.assert_eq(t.month >= 1 && t.month <= 12, true)
+  @test.assert_eq(t.day >= 1 && t.day <= 31, true)
+  @test.assert_eq(t.year > 1970, true)
+}
+
+test "date epoch roundtrip" {
+  let samples = [
+    Date::{ year: 1970, month: 1, day: 1 },
+    Date::{ year: 2026, month: 8, day: 19 },
+    Date::{ year: 2000, month: 2, day: 29 },
+    Date::{ year: 2024, month: 12, day: 31 },
+    Date::{ year: 1999, month: 3, day: 1 },
+  ]
+  for s in samples {
+    let z = _days_since_epoch(s)
+    let (y, m, d) = _gregorian_from_epoch_days(z)
+    @test.assert_eq((y, m, d), (s.year, s.month, s.day))
+  }
 }
 
 /// Humanize a date relative to `when`. Returns today/tomorrow/yesterday or a
