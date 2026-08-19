@@ -445,7 +445,7 @@ test "date epoch roundtrip" {
 /// formatted date string.
 pub fn naturalday(
   value : Date,
-  when~ : Date = Date::{ year: 2010, month: 2, day: 2 },
+  when~ : Date = Date::today(),
   format~ : String = "%b %d"
 ) -> String {
   let d = _date_diff_days(value, when)
@@ -461,11 +461,11 @@ pub fn naturalday(
   _format_date(value, format)
 }
 
-/// Like `naturalday`, but append a year for dates from a different year than
-/// `when`. (The Python "five months" rule is not applied in this port.)
+/// Like `naturalday`, but append a year for dates more than ~five months away
+/// from `when` (Python's `abs(value - when).days >= 5 * 365 / 12` rule).
 pub fn naturaldate(
   value : Date,
-  when~ : Date = Date::{ year: 2010, month: 2, day: 2 }
+  when~ : Date = Date::today()
 ) -> String {
   let d = _date_diff_days(value, when)
   if d == 0 {
@@ -477,11 +477,33 @@ pub fn naturaldate(
   if d == -1 {
     return gettext("yesterday")
   }
-  if value.year != when.year {
+  if d.abs() >= 152 {
     _format_date(value, "%b %d %Y")
   } else {
     _format_date(value, "%b %d")
   }
+}
+
+// naturalday / naturaldate fixed-`when~` tests (whitebox: Date is constructible
+// here; the blackbox test package sees only the published read-only Date).
+// Expected strings derive from Python's formatting rule (strftime "%b %d";
+// abs(diff)>=152 -> "%b %d %Y"). Python's naturalday/naturaldate take no `when`
+// param, so MoonBit's `when~` is a super-set extension; golden values come from
+// the formatting rule.
+test "naturalday fixed when" {
+  let today = Date::{ year: 2026, month: 8, day: 19 }
+  @test.assert_eq(naturalday(Date::{ year: 2026, month: 8, day: 19 }, when = today), "today")
+  @test.assert_eq(naturalday(Date::{ year: 2026, month: 8, day: 20 }, when = today), "tomorrow")
+  @test.assert_eq(naturalday(Date::{ year: 2026, month: 8, day: 18 }, when = today), "yesterday")
+  @test.assert_eq(naturalday(Date::{ year: 2026, month: 8, day: 21 }, when = today), "Aug 21")
+  @test.assert_eq(naturalday(Date::{ year: 2026, month: 8, day: 14 }, when = today), "Aug 14")
+}
+
+test "naturaldate fixed when" {
+  let today = Date::{ year: 2026, month: 8, day: 19 }
+  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 8, day: 21 }, when = today), "Aug 21")
+  // diff = -157 (>=152) -> with year
+  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 15 }, when = today), "Mar 15 2026")
 }
 
 fn _date_diff_days(value : Date, when : Date) -> Int {
