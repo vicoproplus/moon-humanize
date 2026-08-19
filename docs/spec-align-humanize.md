@@ -190,7 +190,7 @@
 3. **`format_fixed` 舍入**：`util.mbt:25` 注明采用 round-half-up，Python `%.Nf` 为 round-half-to-even。绝大多数输入无差异，仅在 `x.5` 边界可能不同；T3 断言已覆盖代表性输入，待实测。
 4. **`naturalsize` gnu 后缀怪癖**：Python `gnu=True` 在低于 1 单位时带 `suffix`（`"300B"`），高于 1 单位时**不带**（`"2.9K"`），`ls -sh` 风格。MoonBit 按此逐字节复刻（D2）。
 5. **`naturalday`/`naturaldate` 默认 `when~` = `Date::today()`**：由 `now()`（纳秒 epoch）换算本地日历日；修复了旧版硬编码 `2010-02-02` 导致永远不输出 today/yesterday/tomorrow 的问题。测试用固定 `when~` 隔离真实时钟依赖。
-6. **`naturaldate` 五年规则**：已按 Python 对齐（`abs(value-when).days >= 152` 时带年份 `"%b %d %Y"`，否则 `"%b %d"`）。Python `naturalday`/`naturaldate` 本身**无** `when` 形参（内部用 `date.today()`），MoonBit 的 `when~` 属超集扩展。
+6. **`naturaldate` 五年规则**：已按 Python 对齐（`abs(value-when).days >= 5*365/12`；`5*365/12 = 152.0833`，对整数天数为 `>= 153` 时带年份 `"%b %d %Y"`，否则 `"%b %d"`）。Python `naturalday`/`naturaldate` 本身**无** `when` 形参（内部用 `date.today()`），MoonBit 的 `when~` 属超集扩展。
 7. **`naturaltime(when~)` 语义限制**：MoonBit `TimeInput` 仅相对输入（seconds/delta），对相对输入 `when~` 不改变输出（Python 对 timedelta/float 输入也由符号判定时态、`when` 抵消）。完全生效需后续引入绝对 datetime 输入（YAGNI，本次未做）。
 8. **`filetime`/`natsize`（Python deprecated）未实现**：建议改用 `naturalsize`，与 Python 现状一致跳过。
 

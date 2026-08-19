@@ -512,7 +512,7 @@ pub fn naturaldate(
   if d == -1 {
     return gettext("yesterday")
   }
-  if d.abs() >= 152 {
+  if d.abs() >= 153 {
     _format_date(value, "%b %d %Y")
   } else {
     _format_date(value, "%b %d")
@@ -541,17 +541,20 @@ test "naturaldate fixed when" {
   @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 15 }, when = today), "Mar 15 2026")
 }
 
-// naturaldate five-month-rule boundary (abs(diff) >= 152 -> "%b %d %Y").
-// Golden values derived from Python's formatting rule (verified against
-// python-humanize 4.16.0).
+// naturaldate five-month-rule boundary. Python 4.16.0 uses
+// `delta.days >= 5*365/12` where `5*365/12 = 152.0833`, so for integer
+// `delta.days` the cutoff is `abs(diff) >= 153`. Golden values derived from
+// Python's formatting rule (strftime "%b %d %Y" vs "%b %d").
 test "naturaldate five month rule" {
   let today = Date::{ year: 2026, month: 8, day: 19 }
-  // diff = -199 (>=152) -> with year
+  // diff = -199 (>=153) -> with year
   @test.assert_eq(naturaldate(Date::{ year: 2026, month: 2, day: 1 }, when = today), "Feb 01 2026")
-  // diff = -100 (<152) -> without year
+  // diff = -100 (<153) -> without year
   @test.assert_eq(naturaldate(Date::{ year: 2026, month: 5, day: 11 }, when = today), "May 11")
-  // diff = -152 (boundary, >=152) -> with year
-  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 20 }, when = today), "Mar 20 2026")
+  // diff = -152 (exactly 152, <153) -> WITHOUT year (Python: "Mar 20")
+  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 20 }, when = today), "Mar 20")
+  // diff = -153 (>=153) -> with year
+  @test.assert_eq(naturaldate(Date::{ year: 2026, month: 3, day: 19 }, when = today), "Mar 19 2026")
 }
 
 fn _date_diff_days(value : Date, when : Date) -> Int {
